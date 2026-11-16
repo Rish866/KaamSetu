@@ -1,0 +1,57 @@
+import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
+import { Href, Link, usePathname } from 'expo-router';
+import React, { PropsWithChildren } from 'react';
+import { Pressable, SafeAreaView, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { colors } from '../theme';
+import { Logo, Pill } from './ui';
+
+const navigation: { label: string; href: Href; icon: keyof typeof Ionicons.glyphMap }[] = [
+  { label: 'Candidate', href: '/candidate', icon: 'person-outline' },
+  { label: 'Employer', href: '/employer', icon: 'business-outline' },
+  { label: 'Admin', href: '/admin', icon: 'shield-checkmark-outline' },
+];
+
+export function AppShell({ children, title, subtitle, role }: PropsWithChildren<{ title: string; subtitle: string; role: string }>) {
+  const pathname = usePathname();
+  const { width } = useWindowDimensions();
+  const desktop = width >= 900;
+  return <SafeAreaView style={styles.safe}><View style={styles.shell}>
+    {desktop && <LinearGradient colors={['#191D3E', '#11152D', '#0E1A30']} start={{ x: 0, y: 0 }} end={{ x: 0.8, y: 1 }} style={styles.sidebar}>
+      <Link href="/" asChild><Pressable><Logo inverted /></Pressable></Link>
+      <View style={styles.sideNav}>{navigation.map((item) => {
+        const active = pathname === item.href;
+        return <Link href={item.href} asChild key={item.label}><Pressable style={StyleSheet.flatten([styles.navItem, active && styles.navItemActive])}>
+          <View style={[styles.navIcon, active && styles.navIconActive]}><Ionicons name={item.icon} size={19} color={active ? '#FFFFFF' : '#9FA6BF'} /></View>
+          <Text style={[styles.navText, active && styles.navTextActive]}>{item.label}</Text>{active && <View style={styles.activeDot} />}
+        </Pressable></Link>;
+      })}</View>
+      <View style={styles.privacyCard}><View style={styles.privacyIcon}><Ionicons name="lock-closed" size={17} color="#B4B6FF" /></View><Text style={styles.privacyTitle}>Privacy first</Text><Text style={styles.privacyText}>Contact details stay hidden until the candidate agrees.</Text><View style={styles.secureRow}><View style={styles.secureDot} /><Text style={styles.secureText}>Secure by design</Text></View></View>
+    </LinearGradient>}
+    <View style={styles.main}>
+      <View style={styles.topbar}>
+        {!desktop && <Link href="/" asChild><Pressable><Logo compact /></Pressable></Link>}
+        <View style={styles.titleWrap}><Pill tone="neutral">{role}</Pill><Text style={styles.pageTitle}>{title}</Text><Text style={styles.subtitle}>{subtitle}</Text></View>
+        <View style={styles.topActions}>{desktop && <View style={styles.searchHint}><Ionicons name="search-outline" size={18} color={colors.inkSoft} /><Text style={styles.searchText}>Search anything</Text><View style={styles.keyHint}><Text style={styles.keyText}>⌘ K</Text></View></View>}<View style={styles.bell}><Ionicons name="notifications-outline" size={20} color={colors.ink} /><View style={styles.notificationDot} /></View><LinearGradient colors={['#FFF0D1', '#FFD89A']} style={styles.avatar}><Text style={styles.avatarText}>AK</Text></LinearGradient></View>
+      </View>
+      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>{children}</ScrollView>
+      {!desktop && <View style={styles.bottomNav}>{navigation.map((item) => {
+        const active = pathname === item.href;
+        return <Link href={item.href} asChild key={item.label}><Pressable style={styles.bottomItem}><View style={[styles.bottomIcon, active && styles.bottomIconActive]}><Ionicons name={item.icon} size={20} color={active ? colors.teal : colors.inkSoft} /></View><Text style={[styles.bottomText, active && styles.bottomTextActive]}>{item.label}</Text></Pressable></Link>;
+      })}</View>}
+    </View>
+  </View></SafeAreaView>;
+}
+
+const styles = StyleSheet.create({
+  safe: { flex: 1, backgroundColor: colors.cream }, shell: { flex: 1, flexDirection: 'row' }, main: { flex: 1 },
+  sidebar: { width: 252, padding: 24, justifyContent: 'space-between' }, sideNav: { flex: 1, marginTop: 52, gap: 9 },
+  navItem: { minHeight: 52, paddingHorizontal: 10, borderRadius: 16, flexDirection: 'row', alignItems: 'center', gap: 11 }, navItemActive: { backgroundColor: 'rgba(117,118,255,0.18)', borderWidth: 1, borderColor: 'rgba(174,176,255,0.16)' },
+  navIcon: { width: 34, height: 34, borderRadius: 11, alignItems: 'center', justifyContent: 'center' }, navIconActive: { backgroundColor: 'rgba(255,255,255,0.11)' }, navText: { color: '#9FA6BF', fontWeight: '700', flex: 1 }, navTextActive: { color: '#FFFFFF' }, activeDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#6FE4ED' },
+  privacyCard: { backgroundColor: 'rgba(255,255,255,0.07)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)', borderRadius: 22, padding: 17, gap: 8 }, privacyIcon: { width: 34, height: 34, borderRadius: 12, backgroundColor: 'rgba(117,118,255,0.18)', alignItems: 'center', justifyContent: 'center' }, privacyTitle: { color: '#FFFFFF', fontWeight: '900' }, privacyText: { color: '#9FA6BF', fontSize: 12, lineHeight: 18 }, secureRow: { flexDirection: 'row', alignItems: 'center', gap: 7, marginTop: 4 }, secureDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: '#61D9B4' }, secureText: { color: '#BFC4D6', fontSize: 10, fontWeight: '700' },
+  topbar: { paddingHorizontal: 28, paddingVertical: 18, borderBottomWidth: 1, borderBottomColor: colors.line, backgroundColor: 'rgba(255,255,255,0.94)', flexDirection: 'row', alignItems: 'center', gap: 16 }, titleWrap: { flex: 1, gap: 3 }, pageTitle: { color: colors.ink, fontWeight: '900', fontSize: 23, letterSpacing: -0.6 }, subtitle: { color: colors.inkSoft, fontSize: 13 },
+  topActions: { flexDirection: 'row', alignItems: 'center', gap: 10 }, searchHint: { height: 42, minWidth: 186, borderRadius: 14, backgroundColor: colors.muted, paddingHorizontal: 12, flexDirection: 'row', alignItems: 'center', gap: 8 }, searchText: { color: colors.inkSoft, fontSize: 13, flex: 1 }, keyHint: { paddingHorizontal: 7, paddingVertical: 4, borderRadius: 7, backgroundColor: '#FFFFFF' }, keyText: { color: colors.inkSoft, fontSize: 10, fontWeight: '700' },
+  bell: { width: 42, height: 42, borderRadius: 14, backgroundColor: colors.muted, alignItems: 'center', justifyContent: 'center' }, notificationDot: { position: 'absolute', width: 7, height: 7, borderRadius: 4, backgroundColor: colors.coral, right: 9, top: 9, borderWidth: 1.5, borderColor: '#fff' }, avatar: { width: 42, height: 42, borderRadius: 14, alignItems: 'center', justifyContent: 'center' }, avatarText: { color: '#8A5B00', fontWeight: '900' },
+  content: { padding: 28, paddingBottom: 110, gap: 22, maxWidth: 1240, width: '100%', alignSelf: 'center' },
+  bottomNav: { position: 'absolute', bottom: 10, left: 12, right: 12, minHeight: 68, backgroundColor: 'rgba(255,255,255,0.97)', borderWidth: 1, borderColor: colors.line, borderRadius: 22, flexDirection: 'row', paddingBottom: 5, shadowColor: colors.navy, shadowOpacity: 0.14, shadowRadius: 22, shadowOffset: { width: 0, height: 8 }, elevation: 8 }, bottomItem: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 2 }, bottomIcon: { width: 32, height: 28, borderRadius: 10, alignItems: 'center', justifyContent: 'center' }, bottomIconActive: { backgroundColor: colors.tealPale }, bottomText: { color: colors.inkSoft, fontSize: 10, fontWeight: '700' }, bottomTextActive: { color: colors.teal },
+});

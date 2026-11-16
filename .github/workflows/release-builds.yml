@@ -1,0 +1,122 @@
+name: Release builds
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  android-apk:
+    name: Android APK
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: gradle
+      - run: npm ci
+      - run: npx expo prebuild --platform android --no-install
+      - name: Build installable release APK
+        working-directory: android
+        run: ./gradlew assembleRelease --no-daemon
+      - name: Stage APK
+        run: |
+          mkdir -p release
+          cp android/app/build/outputs/apk/release/app-release.apk release/KaamSetu-v1.0.0.apk
+      - uses: actions/upload-artifact@v4
+        with:
+          name: kaamsetu-android-apk
+          path: release/KaamSetu-v1.0.0.apk
+          if-no-files-found: error
+
+  ios-simulator:
+    name: iOS simulator app
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx expo prebuild --platform ios --no-install
+      - name: Install CocoaPods
+        working-directory: ios
+        run: pod install
+      - name: Build iOS simulator app
+        working-directory: ios
+        run: |
+          xcodebuild \
+            -workspace KaamSetu.xcworkspace \
+            -scheme KaamSetu \
+            -configuration Release \
+            -sdk iphonesimulator \
+            -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO \
+            build
+      - name: Stage iOS simulator bundle
+        run: |
+          mkdir -p release
+          ditto -c -k --sequesterRsrc --keepParent \
+            ios/build/Build/Products/Release-iphonesimulator/KaamSetu.app \
+            release/KaamSetu-iOS-Simulator-v1.0.0.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: kaamsetu-ios-simulator
+          path: release/KaamSetu-iOS-Simulator-v1.0.0.zip
+          if-no-files-found: error
+
+  website:
+    name: Website
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run build:web
+      - name: Package website
+        run: |
+          mkdir -p release
+          tar -czf release/KaamSetu-web-v1.0.0.tar.gz -C dist .
+      - uses: actions/upload-artifact@v4
+        with:
+          name: kaamsetu-website
+          path: release/KaamSetu-web-v1.0.0.tar.gz
+          if-no-files-found: error
+
+  github-release:
+    name: Publish GitHub release
+    if: startsWith(github.ref, 'refs/tags/')
+    needs: [android-apk, ios-simulator, website]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: kaamsetu-*
+          path: release
+          merge-multiple: true
+      - uses: softprops/action-gh-release@v2
+        with:
+          name: KaamSetu 1.0.0
+          body: |
+            First KaamSetu cross-platform release.
+
+            - `KaamSetu-v1.0.0.apk`: installable Android APK
+            - `KaamSetu-iOS-Simulator-v1.0.0.zip`: iOS Simulator app bundle
+            - `KaamSetu-web-v1.0.0.tar.gz`: production website export
+
+            A physical-iPhone/App Store IPA requires Apple Developer signing credentials.
+          files: release/*
