@@ -19,24 +19,24 @@ jobs:
         with:
           node-version: 22
           cache: npm
-      - uses: actions/setup-java@v4
+      - run: npm ci
+      - run: npx expo prebuild --platform android --no-install
+      - uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: '17'
           cache: gradle
-      - run: npm ci
-      - run: npx expo prebuild --platform android --no-install
       - name: Build installable release APK
         working-directory: android
         run: ./gradlew assembleRelease --no-daemon
       - name: Stage APK
         run: |
           mkdir -p release
-          cp android/app/build/outputs/apk/release/app-release.apk release/KaamSetu-v1.0.0.apk
+          cp android/app/build/outputs/apk/release/app-release.apk "release/KaamSetu-${{ github.ref_name }}.apk"
       - uses: actions/upload-artifact@v4
         with:
           name: kaamsetu-android-apk
-          path: release/KaamSetu-v1.0.0.apk
+          path: release/KaamSetu-*.apk
           if-no-files-found: error
 
   ios-simulator:
@@ -69,11 +69,11 @@ jobs:
           mkdir -p release
           ditto -c -k --sequesterRsrc --keepParent \
             ios/build/Build/Products/Release-iphonesimulator/KaamSetu.app \
-            release/KaamSetu-iOS-Simulator-v1.0.0.zip
+            "release/KaamSetu-iOS-Simulator-${{ github.ref_name }}.zip"
       - uses: actions/upload-artifact@v4
         with:
           name: kaamsetu-ios-simulator
-          path: release/KaamSetu-iOS-Simulator-v1.0.0.zip
+          path: release/KaamSetu-iOS-Simulator-*.zip
           if-no-files-found: error
 
   website:
@@ -90,11 +90,11 @@ jobs:
       - name: Package website
         run: |
           mkdir -p release
-          tar -czf release/KaamSetu-web-v1.0.0.tar.gz -C dist .
+          tar -czf "release/KaamSetu-web-${{ github.ref_name }}.tar.gz" -C dist .
       - uses: actions/upload-artifact@v4
         with:
           name: kaamsetu-website
-          path: release/KaamSetu-web-v1.0.0.tar.gz
+          path: release/KaamSetu-web-*.tar.gz
           if-no-files-found: error
 
   github-release:
@@ -110,13 +110,13 @@ jobs:
           merge-multiple: true
       - uses: softprops/action-gh-release@v2
         with:
-          name: KaamSetu 1.0.0
+          name: KaamSetu ${{ github.ref_name }}
           body: |
             First KaamSetu cross-platform release.
 
-            - `KaamSetu-v1.0.0.apk`: installable Android APK
-            - `KaamSetu-iOS-Simulator-v1.0.0.zip`: iOS Simulator app bundle
-            - `KaamSetu-web-v1.0.0.tar.gz`: production website export
+            - `KaamSetu-${{ github.ref_name }}.apk`: installable Android APK
+            - `KaamSetu-iOS-Simulator-${{ github.ref_name }}.zip`: iOS Simulator app bundle
+            - `KaamSetu-web-${{ github.ref_name }}.tar.gz`: production website export
 
             A physical-iPhone/App Store IPA requires Apple Developer signing credentials.
           files: release/*
