@@ -2,7 +2,7 @@
   "expo": {
     "name": "KaamSetu",
     "slug": "kaamsetu",
-    "version": "1.1.0",
+    "version": "1.2.0",
     "orientation": "portrait",
     "scheme": "kaamsetu",
     "icon": "./assets/kaamsetu-icon.png",
@@ -10,11 +10,11 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.rish866.kaamsetu",
-      "buildNumber": "2"
+      "buildNumber": "3"
     },
     "android": {
       "package": "com.rish866.kaamsetu",
-      "versionCode": 2,
+      "versionCode": 3,
       "adaptiveIcon": {
         "backgroundColor": "#11152D",
         "foregroundImage": "./assets/kaamsetu-icon.png"

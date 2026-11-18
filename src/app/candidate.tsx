@@ -1,22 +1,85 @@
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { StyleSheet, Switch, Text, useWindowDimensions, View } from 'react-native';
 import { AppShell } from '../components/AppShell';
 import { Card, Metric, Pill, PrimaryButton } from '../components/ui';
 import { jobs, Job } from '../data/mock';
+import { supabase } from '../lib/supabase';
 import { useDemo } from '../state/DemoContext';
 import { colors } from '../theme';
 
 export default function CandidateScreen() {
   const { width } = useWindowDimensions(); const compact = width < 720;
   const { appliedJobs, apply, discoveryEnabled, setDiscoveryEnabled } = useDemo();
-  return <AppShell role="Candidate demo" title="Good morning, Asha" subtitle="Three new jobs fit your preferences">
-    <View style={styles.metrics}><Metric label="Strong matches" value="12" icon="sparkles-outline" /><Metric label="Applications" value={`${3 + appliedJobs.length}`} icon="paper-plane-outline" accent="#DDE9FF" /><Metric label="Employer invites" value="2" icon="mail-unread-outline" accent={colors.saffronPale} /><Metric label="Profile strength" value="86%" icon="ribbon-outline" accent="#FCE2DA" /></View>
-    <Card style={styles.discovery}><View style={styles.discoveryIcon}><Ionicons name={discoveryEnabled ? 'eye' : 'eye-off'} size={23} color={colors.teal} /></View><View style={styles.discoveryCopy}><Text style={styles.cardTitle}>Let verified employers discover you</Text><Text style={styles.cardText}>{discoveryEnabled ? 'Your masked profile is visible. Phone, email and resume remain private.' : 'You are hidden from all new employer searches.'}</Text></View><Switch value={discoveryEnabled} onValueChange={setDiscoveryEnabled} trackColor={{ false: '#BCC9C6', true: '#6DC2B6' }} thumbColor={discoveryEnabled ? colors.teal : '#fff'} /></Card>
+  const [live, setLive] = useState(false);
+  const [name, setName] = useState('Asha');
+  const [liveJobs, setLiveJobs] = useState<Job[]>([]);
+  const [liveApplications, setLiveApplications] = useState<string[]>([]);
+  const [liveDiscovery, setLiveDiscovery] = useState(false);
+  const [inviteCount, setInviteCount] = useState(0);
+  const shownJobs = live ? liveJobs : jobs;
+  const shownApplications = live ? liveApplications : appliedJobs;
+  const shownDiscovery = live ? liveDiscovery : discoveryEnabled;
+
+  async function loadCandidate() {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) return;
+    setLive(true);
+    setName(session.user.user_metadata?.display_name ?? 'KaamSetu member');
+    await supabase.from('candidate_profiles').upsert({ user_id: session.user.id }, { onConflict: 'user_id', ignoreDuplicates: true });
+    const [profile, jobResult, applicationResult, invitationResult] = await Promise.all([
+      supabase.from('candidate_profiles').select('discovery_enabled').eq('user_id', session.user.id).single(),
+      supabase.from('jobs').select('id,title,salary_min,salary_max,salary_period,work_mode,published_at,companies(display_name,verification_status),locations(city,locality),job_skills(skills(name))').eq('status', 'published').order('published_at', { ascending: false }),
+      supabase.from('applications').select('job_id').eq('candidate_id', session.user.id),
+      supabase.from('job_invitations').select('id', { count: 'exact', head: true }).eq('candidate_id', session.user.id).eq('status', 'pending'),
+    ]);
+    setLiveDiscovery(Boolean(profile.data?.discovery_enabled));
+    setLiveApplications((applicationResult.data ?? []).map((item) => item.job_id));
+    setInviteCount(invitationResult.count ?? 0);
+    const mapped = (jobResult.data ?? []).map((row: any) => ({
+      id: row.id,
+      title: row.title,
+      company: row.companies?.display_name ?? 'Verified employer',
+      location: [row.locations?.locality, row.locations?.city].filter(Boolean).join(', ') || 'Flexible location',
+      workMode: String(row.work_mode).replace(/^./, (value) => value.toUpperCase()),
+      posted: row.published_at ? new Date(row.published_at).toLocaleDateString('en-IN') : 'Recently',
+      salary: row.salary_period === 'monthly' ? `₹${row.salary_min.toLocaleString('en-IN')}–₹${row.salary_max.toLocaleString('en-IN')} / month` : `₹${(row.salary_min / 100000).toFixed(1)}–${(row.salary_max / 100000).toFixed(1)} LPA`,
+      score: 80,
+      skills: (row.job_skills ?? []).map((item: any) => item.skills?.name).filter(Boolean).slice(0, 4),
+      reasons: ['Salary disclosed', 'Location preference considered', 'Skills reviewed'],
+      verified: row.companies?.verification_status === 'approved',
+    }));
+    setLiveJobs(mapped);
+  }
+
+  useEffect(() => { void Promise.resolve().then(loadCandidate); }, []);
+
+  async function applyToJob(jobId: string) {
+    if (!live) return apply(jobId);
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) return;
+    const { error } = await supabase.from('applications').insert({ job_id: jobId, candidate_id: session.user.id });
+    if (!error) setLiveApplications((value) => value.includes(jobId) ? value : [...value, jobId]);
+  }
+
+  async function changeDiscovery(enabled: boolean) {
+    if (!live) return setDiscoveryEnabled(enabled);
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) return;
+    const { error } = await supabase.from('candidate_profiles').update({ discovery_enabled: enabled, updated_at: new Date().toISOString() }).eq('user_id', session.user.id);
+    if (!error) {
+      setLiveDiscovery(enabled);
+      await supabase.from('consent_records').insert({ user_id: session.user.id, purpose: 'employer_discovery', action: enabled ? 'granted' : 'withdrawn', notice_version: '2026-11-18' });
+    }
+  }
+
+  return <AppShell role={live ? 'Candidate' : 'Candidate demo'} title={`Good morning, ${name}`} subtitle={live ? `${liveJobs.length} published jobs available now` : 'Three new jobs fit your preferences'}>
+    <View style={styles.metrics}><Metric label="Strong matches" value={`${shownJobs.length}`} icon="sparkles-outline" /><Metric label="Applications" value={`${live ? liveApplications.length : 3 + appliedJobs.length}`} icon="paper-plane-outline" accent="#DDE9FF" /><Metric label="Employer invites" value={`${live ? inviteCount : 2}`} icon="mail-unread-outline" accent={colors.saffronPale} /><Metric label="Profile strength" value={live ? 'Start' : '86%'} icon="ribbon-outline" accent="#FCE2DA" /></View>
+    <Card style={styles.discovery}><View style={styles.discoveryIcon}><Ionicons name={shownDiscovery ? 'eye' : 'eye-off'} size={23} color={colors.teal} /></View><View style={styles.discoveryCopy}><Text style={styles.cardTitle}>Let verified employers discover you</Text><Text style={styles.cardText}>{shownDiscovery ? 'Your masked profile is visible. Phone, email and resume remain private.' : 'You are hidden from all new employer searches.'}</Text></View><Switch value={shownDiscovery} onValueChange={changeDiscovery} trackColor={{ false: '#BCC9C6', true: '#6DC2B6' }} thumbColor={shownDiscovery ? colors.teal : '#fff'} /></Card>
     <View style={styles.sectionHead}><View style={styles.sectionCopy}><Text style={styles.sectionTitle}>Best matches for you</Text><Text style={styles.sectionSub}>Ranked using your confirmed skills, salary and location preferences</Text></View><Pill tone="neutral">Explainable matches</Pill></View>
-    <View style={styles.jobList}>{jobs.map((job) => <JobCard key={job.id} job={job} applied={appliedJobs.includes(job.id)} onApply={() => apply(job.id)} compact={compact} />)}</View>
-    <Card style={styles.invite}><View style={styles.inviteBadge}><Ionicons name="business" size={24} color="#8A5B00" /></View><View style={styles.discoveryCopy}><Text style={styles.cardTitle}>KiteRoute Logistics invited you</Text><Text style={styles.cardText}>Inside Sales Specialist · Thane · ₹4.8–6.6 LPA. Your details are still hidden until you accept.</Text></View><PrimaryButton label="Review invite" variant="ghost" icon="arrow-forward" /></Card>
+    <View style={styles.jobList}>{shownJobs.length ? shownJobs.map((job) => <JobCard key={job.id} job={job} applied={shownApplications.includes(job.id)} onApply={() => applyToJob(job.id)} compact={compact} />) : <Card><Text style={styles.cardTitle}>No published jobs yet</Text><Text style={styles.cardText}>Verified employers are being onboarded. New salary-visible jobs will appear here automatically.</Text></Card>}</View>
+    {(!live || inviteCount > 0) && <Card style={styles.invite}><View style={styles.inviteBadge}><Ionicons name="business" size={24} color="#8A5B00" /></View><View style={styles.discoveryCopy}><Text style={styles.cardTitle}>{live ? `${inviteCount} employer invitation${inviteCount === 1 ? '' : 's'}` : 'KiteRoute Logistics invited you'}</Text><Text style={styles.cardText}>{live ? 'Review each role before deciding whether to share your application.' : 'Inside Sales Specialist · Thane · ₹4.8–6.6 LPA. Your details are still hidden until you accept.'}</Text></View><PrimaryButton label="Review invite" variant="ghost" icon="arrow-forward" /></Card>}
   </AppShell>;
 }
 
