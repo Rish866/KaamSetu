@@ -1,41 +1,39 @@
-# Owner actions (things only Aarvya Global Ventures LLP can do)
+# Owner actions (only Aarvya Global Ventures LLP can do these)
 
-Do them in this order. Each step is one action. Never paste a key or password into chat; enter it only on the website named.
+One step at a time, in this order. Never paste a key or password into chat: enter it only on the website named.
+Status of each step is recorded in docs/AUDIT.md.
 
-## A. Go live with v1.4.0 (needed first)
-1. **Merge the pull request** on GitHub (green "Merge" button) once you have read the summary.
-2. **Supabase plan:** in supabase.com → project `zrexqtzhdkkupyxmfqxd` → Billing, choose Pro and turn on Point-in-Time Recovery (paid; recommended before real users).
-3. **GitHub secrets** (GitHub → repository → Settings → Secrets and variables → Actions → New repository secret):
-   `SUPABASE_ACCESS_TOKEN` (from supabase.com/dashboard/account/tokens) and `SUPABASE_DB_PASSWORD` (Supabase → Database settings).
-   After this, I (or any engineer) can apply the migrations and verify history without ever seeing the values.
-4. **Email provider:** create an account with a transactional email service (for example Resend, Amazon SES or Postmark), add the domain `getkaamsetu.in`, and add the DNS records it gives you in **GoDaddy** → DNS. Then in Supabase → Edge Functions → Secrets add `EMAIL_API_URL`, `EMAIL_API_KEY`, `EMAIL_FROM`. Also set the same provider as custom SMTP in Supabase → Auth → SMTP so confirmation and reset emails come from your domain.
-5. **Mailboxes:** create `support@getkaamsetu.in` and `privacy@getkaamsetu.in` (GoDaddy email or Google Workspace) and decide who reads them.
-6. **Sites deploy access:** allow deployment of `dist/` to the existing Sites project (`.openai/hosting.json`). Keep the custom domain and public audience unchanged.
-7. **Promote at least one more trusted person** to moderator after go-live (Admin console → Access). Do not share your own login.
+## Step 1 (blocks everything that touches production)
+Add three repository secrets: GitHub → Rish866/KaamSetu → Settings → Secrets and variables → Actions → **New repository secret**:
+* `SUPABASE_ACCESS_TOKEN`: create at supabase.com/dashboard/account/tokens (name it "KaamSetu GitHub Actions").
+* `SUPABASE_DB_PASSWORD`: the database password of project `zrexqtzhdkkupyxmfqxd` (Supabase → Project Settings → Database; reset it there if unknown).
+* `BACKUP_PASSPHRASE`: a long passphrase you invent and also save in your password manager. It encrypts the production backups (the repository is public).
 
-## B. Legal (before inviting pilot users)
-8. Send `docs/PRIVACY.md`, `src/content/legal.ts` and `docs/store/PRIVACY_DISCLOSURES.md` to a qualified Indian lawyer. Every **[LEGAL]** item needs a decision.
-9. Fill in: Grievance Officer name, registered postal address, response time, retention periods, incident contacts (docs/OPERATIONS.md section 5).
+Then say "secrets added". The engineer then runs `status`, `backup` and `dry-run` and reports the results before anything is changed.
 
-## C. Decisions with cost (optional but recommended)
-10. Resume malware scanning vendor (until then resumes stay quarantined and are not downloadable).
-11. Resume parsing vendor (the review flow is ready; nothing is applied without candidate approval).
-12. Cloudflare Turnstile CAPTCHA (free) for sign-up abuse.
-13. Error monitoring (Sentry, free tier), after legal review of the processor.
-14. SMS provider, only if you want phone-only users to reset passwords (not needed for launch).
+## Step 2: deployment window (after step 1's dry-run is reviewed)
+Be available for about 30 minutes. The engineer merges PR #3 and applies the migrations; immediately afterwards you deploy the website from `main` to the existing Sites project in your OpenAI workspace (same project, same custom domain, same public audience). Say "deployed" when Sites shows the new version.
 
-## D. Android (Google Play)
-15. Create a Google Play Console developer account for Aarvya Global Ventures LLP (one-time fee, identity and organisation verification by Google).
-16. Create the app `com.rish866.kaamsetu`, accept the agreements, and enrol in Play App Signing.
-17. Generate an upload keystore on your own computer (`keytool -genkeypair -v -keystore upload.jks -alias upload -keyalg RSA -keysize 2048 -validity 10000`), keep two offline backups, and add GitHub secrets `ANDROID_KEYSTORE_BASE64` (`base64 -w0 upload.jks`), `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS`, `ANDROID_KEY_PASSWORD`. The next tag then produces a signed AAB.
-18. Upload the AAB to the Internal testing track and fill the listing from `docs/store/`.
+## Step 3: test administrator for live verification
+Create a separate account (for example qa-admin@getkaamsetu.in) on the website, give it the admin role, and add GitHub secrets `LIVE_ADMIN_EMAIL` and `LIVE_ADMIN_PASSWORD`. To grant the role, sign in with your own admin account → Admin → Access & matching → Grant role (needs the new account's user ID from the Users tab). If no admin account exists yet, the engineer will provide one SQL statement for you to run in the Supabase SQL editor.
 
-## E. iPhone (App Store / TestFlight)
-19. Enrol Aarvya Global Ventures LLP in the Apple Developer Program (annual fee; needs a D-U-N-S number for organisations).
-20. In App Store Connect create the app with bundle ID `com.rish866.kaamsetu`.
-21. Create an Expo account (expo.dev), run `npx eas-cli@latest credentials` once on your Mac/PC to let EAS manage Apple certificates, and add GitHub secret `EXPO_TOKEN`. The next tag then sends a build to TestFlight.
+## Step 4: background workers
+Add GitHub secret `WORKER_SECRET` (any random 40-character value). The engineer then deploys the Edge Functions and sets the same secret in Supabase through the workflow.
 
-## F. Pilot
-22. Create the reviewer/test accounts (docs/store/REVIEWER_ACCOUNTS.md).
-23. Run the first restore drill (docs/OPERATIONS.md section 4) and the staging security checks (docs/SECURITY.md).
-24. Invite 3–5 employers and 20–50 candidates (docs/PILOT.md).
+## Step 5: email delivery (purchase/account)
+Create an account with Resend or Postmark, add the domain `getkaamsetu.in`, add the DNS records it shows in GoDaddy, wait until the provider shows the domain as verified, then add secrets in Supabase → Edge Functions → Secrets: `EMAIL_PROVIDER` (`resend` or `postmark`), `EMAIL_API_KEY`, `EMAIL_FROM` (e.g. `KaamSetu <no-reply@getkaamsetu.in>`). Also set the same provider as custom SMTP in Supabase → Authentication → SMTP. After this, email confirmation can be turned on.
+
+## Step 6: malware scanning (decision with cost)
+Choose how resumes are scanned: self-host the open-source ClamAV REST service (small server, monthly cost) or a commercial scanning API. Until then every resume stays quarantined and employers cannot open resumes.
+
+## Step 7: mailboxes and legal
+Create `support@getkaamsetu.in` and `privacy@getkaamsetu.in`. Send docs/PRIVACY.md (the "Items that need legal approval" list), `src/content/legal.ts` and docs/store/PRIVACY_DISCLOSURES.md to a qualified Indian lawyer.
+
+## Step 8: Google Play
+Create a Play Console developer account for the LLP (fee + identity verification), create app `com.rish866.kaamsetu`, enrol in Play App Signing, generate an upload keystore on your own computer and add the four `ANDROID_*` GitHub secrets (docs/RELEASE.md).
+
+## Step 9: Apple
+Enrol the LLP in the Apple Developer Program (fee; needs a D-U-N-S number), create the App Store Connect app, run `npx eas-cli@latest credentials` once on your computer, add GitHub secret `EXPO_TOKEN`.
+
+## Step 10: pilot
+Physical Android and iPhone devices for smoke tests, 3–5 employers and 20–50 candidates (docs/PILOT.md).

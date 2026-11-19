@@ -8,9 +8,9 @@ on:
   workflow_dispatch:
     inputs:
       action:
-        description: status | backup | dry-run | apply | checks
+        description: status | backup | dry-run | apply | checks | functions
         type: choice
-        options: [status, backup, dry-run, apply, checks]
+        options: [status, backup, dry-run, apply, checks, functions]
         default: status
       confirm:
         description: 'Required for apply: type APPLY zrexqtzhdkkupyxmfqxd'
@@ -39,6 +39,7 @@ jobs:
           T: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
           P: ${{ secrets.SUPABASE_DB_PASSWORD }}
           B: ${{ secrets.BACKUP_PASSPHRASE }}
+          W: ${{ secrets.WORKER_SECRET }}
           ACTION: ${{ inputs.action }}
           CONFIRM: ${{ inputs.confirm }}
         run: |
@@ -46,6 +47,7 @@ jobs:
           [ -z "$T" ] && missing="$missing SUPABASE_ACCESS_TOKEN"
           [ -z "$P" ] && missing="$missing SUPABASE_DB_PASSWORD"
           if [ "$ACTION" = "backup" ] || [ "$ACTION" = "apply" ]; then [ -z "$B" ] && missing="$missing BACKUP_PASSPHRASE"; fi
+          if [ "$ACTION" = "functions" ] && [ -z "$W" ]; then missing="$missing WORKER_SECRET"; fi
           if [ -n "$missing" ]; then echo "::error::Missing repository secrets:$missing"; exit 1; fi
           if [ "$ACTION" = "apply" ] && [ "$CONFIRM" != "APPLY $PROJECT_REF" ]; then echo "::error::apply requires confirm = 'APPLY $PROJECT_REF'"; exit 1; fi
           echo "Ref: $GITHUB_REF @ $GITHUB_SHA, action: $ACTION"
@@ -83,7 +85,7 @@ jobs:
           echo "url=$url" >> "$GITHUB_OUTPUT"
 
       - name: Pre-flight data checks (read-only)
-        if: inputs.action != 'checks'
+        if: inputs.action != 'checks' && inputs.action != 'functions'
         env:
           DB_URL: ${{ steps.conn.outputs.url }}
         run: psql "$DB_URL" -v ON_ERROR_STOP=1 -f scripts/preflight.sql
@@ -149,3 +151,13 @@ jobs:
       - name: Public API verification (anonymous, read-only)
         if: inputs.action == 'apply' || inputs.action == 'checks'
         run: node scripts/verify-production.mjs --expect-schema 202611200004 || echo "::warning::Public verification reported failures (expected until the v1.4.0 website is deployed)."
+
+      - name: Deploy Edge Functions and set worker secret
+        if: inputs.action == 'functions'
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          WORKER_SECRET: ${{ secrets.WORKER_SECRET }}
+        run: |
+          supabase secrets set --project-ref "$PROJECT_REF" WORKER_SECRET="$WORKER_SECRET" SITE_URL=https://www.getkaamsetu.in
+          for fn in email-worker unsubscribe resume-processor privacy-worker; do supabase functions deploy "$fn" --project-ref "$PROJECT_REF"; done
+          supabase functions list --project-ref "$PROJECT_REF"

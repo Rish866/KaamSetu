@@ -1,4 +1,6 @@
-# Privacy and consent implementation (for review by a qualified Indian lawyer)
+# Privacy and consent implementation (DRAFT for review by a qualified Indian lawyer)
+
+**Status: draft. Not reviewed or approved by a lawyer. KaamSetu is not represented as DPDP compliant.**
 
 KaamSetu does **not** claim legal compliance. This document maps what the software does to the topics a lawyer will
 review under the Digital Personal Data Protection Act, 2023 and the DPDP Rules. Every item tagged **[LEGAL]** needs
@@ -10,6 +12,7 @@ lawyer approval before public launch.
 
 ## Notice and consent (implemented)
 | Purpose | Default | Where | Record |
+| Sharing a security-checked resume with a company you apply to | Happens when you apply | Apply dialog text | `contact_disclosures` row each time an employer opens it |
 |---------|---------|-------|--------|
 | Account (Privacy Notice + Terms acceptance, 18+) | Required checkbox, not preselected | Sign-up | `consent_records` purpose `account`, notice version |
 | Employer discovery | Off | Settings, Profile | `employer_discovery` granted/withdrawn |
@@ -51,3 +54,16 @@ See docs/OPERATIONS.md section 5. **[LEGAL]** confirm DPDP Board and CERT-In rep
 
 ## Documents needing final legal text
 `src/content/legal.ts` (Privacy Notice, Terms, Support), employer terms (fees prohibited, verification, acceptable use), cookie/storage statement for web (only essential local storage is used for the session).
+
+
+## Items that need legal approval before public launch (consolidated)
+1. **Grievance contact:** name of the Grievance Officer / Data Protection contact, postal address, response time (currently only privacy@getkaamsetu.in, mailbox not yet created).
+2. **Retention periods:** values in `public.retention_policies` (180/90/365/1095 days) and a policy for inactive accounts (none automated).
+3. **Processor list:** Supabase (and hosting region), email provider (not chosen), malware-scanning provider (not chosen), OpenAI Sites (web hosting), Expo/EAS (builds), GitHub (source and encrypted backups as workflow artifacts).
+4. **Candidate consent language:** account notice, discovery, contact sharing, resume parsing, marketing; and whether "applying shares your resume with that employer" is an adequate consent mechanism.
+5. **Employer terms:** verification duties, no fees from candidates, acceptable use, data handling of disclosed contacts and resumes.
+6. **Matching disclosure:** wording that scores are rule-based (not AI), the five factors and weights, and that no protected attributes are used.
+7. **Account deletion procedure:** what is erased vs. kept (consent records, audit events, anonymised application history), timelines, and identity verification before processing.
+8. **Breach notification** duties and timelines (DPDP Board, CERT-In).
+9. **Children:** adequacy of the 18+ self-declaration.
+10. **Language:** whether notices are needed in Marathi/Hindi.

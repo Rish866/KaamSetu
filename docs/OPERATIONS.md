@@ -3,32 +3,36 @@
 Audience: whoever runs KaamSetu day to day. Commands assume the Supabase CLI is installed and you are logged in
 (`supabase login`) on a trusted computer. Never paste keys into chat, issues or code.
 
-## 1. Deploying a release (order matters)
+## 1. Deployment window for v1.4.0 (order matters)
 
-1. CI is green on the pull request: lint, types, unit, `test:db` (65 database/RLS/journey tests), web build, browser tests, secret scan.
-2. Merge the PR into `main`.
-3. Back up first (section 4), then apply migrations:
-   `supabase link --project-ref zrexqtzhdkkupyxmfqxd` then `supabase db push`.
-   Verify: `supabase migration list` shows every file in `supabase/migrations` as applied remotely.
-4. Push auth settings: `supabase config push` (applies `supabase/config.toml`: password policy, rate limits, sessions, email confirmation).
-5. Deploy functions: `supabase functions deploy email-worker` and `supabase functions deploy unsubscribe`.
-6. Set function secrets once: `supabase secrets set EMAIL_API_URL=... EMAIL_API_KEY=... EMAIL_FROM="KaamSetu <no-reply@getkaamsetu.in>" SITE_URL=https://www.getkaamsetu.in`.
-7. Web: `npm run build:web`, then deploy `dist/` to the Sites project in `.openai/hosting.json` (`appgprj_6afabfa209448191845427c4122d1c00`). Keep the existing custom domain and public audience.
-8. Tag: `git tag v1.4.0 && git push origin v1.4.0`. The release workflow builds the APK, website archive, iOS Simulator zip, checksums, and (if signing secrets exist) the AAB and TestFlight build.
-9. Smoke test production (section 6).
+Preconditions: repository secrets `SUPABASE_ACCESS_TOKEN`, `SUPABASE_DB_PASSWORD`, `BACKUP_PASSPHRASE` exist; PR #3 CI is green.
 
-**v1.4.0 note:** migration `202611200001` removes direct table writes used by the v1.3.0 app. Ship the v1.4.0 web build
-in the same window as the migration. Installed v1.3.0 Android test APKs will stop being able to apply or post jobs
-until updated. That is intentional (it closes security holes) and acceptable during the test phase.
+1. **Status (read-only):** Actions → "Production database" → Run workflow, ref `feature/product-screens`, action `status`. Confirms migration history and runs `scripts/preflight.sql`. Any row under "blocker" must be fixed first.
+2. **Dry run:** same, action `dry-run`. Shows exactly which migrations would apply (expected: 202611200001, 0002, 0003, 0004).
+3. **Merge PR #3** (closes PR #2 as superseded). Confirm CI on `main` is green.
+4. **Apply:** action `apply`, ref `main`, confirm `APPLY zrexqtzhdkkupyxmfqxd`. The job takes an encrypted backup first (artifact `production-backup-<timestamp>`), applies only unapplied migrations, prints history, runs `scripts/production-checks.sql` (RLS on every table, no anon-executable functions, private buckets, worker functions not callable by users) and `scripts/verify-production.mjs`.
+5. **Website:** the owner deploys `dist/` from `main` to the existing Sites project (`.openai/hosting.json`), keeping the custom domain and public audience. Between steps 4 and 5 the v1.3.0 site is partly broken (its direct writes are now refused). Do 4 and 5 back to back.
+6. **Verify:** `node scripts/verify-production.mjs --expect-schema 202611200004` must pass for both domains. Then run the real-UI journey (`e2e/live/journey.spec.ts`) with the owner-authorised test admin.
+7. **Edge Functions and workers:** `supabase functions deploy email-worker unsubscribe resume-processor privacy-worker`; `supabase secrets set WORKER_SECRET=<random 32+ chars>`; add the same value as GitHub secret `WORKER_SECRET` so the "Background workers" workflow runs every 10 minutes.
+8. Only after 6 passes: tag `v1.4.0` → release workflow builds APK, website archive, Simulator zip, checksums.
+
+## Migration recovery (forward-only)
+
+Migrations are never edited or rolled back in place. If a migration fails or misbehaves:
+* **Failed during `db push`:** the Supabase CLI is expected to run each migration file in its own transaction, so a failing file leaves no partial changes and is not recorded as applied (unverified for this project; confirm with `supabase migration list` and `scripts/preflight.sql` after any failure). Fix it in a **new** migration (the failing one was never applied, so it may be corrected before retrying only if `supabase migration list` confirms it is absent remotely).
+* **Applied but wrong behaviour:** write a new migration that corrects it (e.g. re-create a policy or function). Re-run CI and the `apply` action.
+* **Data damage:** restore from the encrypted backup artifact of that run: `gpg --decrypt <file>.sql.gpg > file.sql`, then restore into a **new** Supabase project (`psql "$NEW_DB_URL" -f roles.sql -f schema.sql -f data.sql`), verify counts against `scripts/preflight.sql` output from the run log, and repoint the app (`EXPO_PUBLIC_SUPABASE_URL`, rebuild). Paid-plan PITR is the faster alternative.
+* **App/DB mismatch:** the v1.4.0 app shows "KaamSetu is being updated" when `schema_version()` is missing or older than it needs, instead of failing screens.
 
 ## 2. Scheduled jobs
 
-| Job | Schedule | How |
-|-----|----------|-----|
-| Expire invitations | hourly | pg_cron (`202611200003`) |
-| Retention clean-up | daily 02:30 UTC | pg_cron, periods in `public.retention_policies` |
-| Send emails | every minute | Supabase Cron → HTTP POST to `/functions/v1/email-worker` with header `Authorization: Bearer <service role key>` (configure in Dashboard → Integrations → Cron; the key stays inside Supabase) |
-| Purge files of deleted accounts | daily | `SUPABASE_URL=... SUPABASE_SERVICE_ROLE_KEY=... node scripts/purge-storage.mjs` from a trusted machine or a private CI job |
+| Job | Schedule | How | Status |
+|-----|----------|-----|--------|
+| Expire invitations | hourly | pg_cron (migration 0003) if the extension is available | unverified in production |
+| Retention clean-up | daily 02:30 UTC | pg_cron, periods in `public.retention_policies` | unverified in production |
+| Email delivery | every 10 min | GitHub "Background workers" → `email-worker` | needs WORKER_SECRET + email provider |
+| Resume scan/parse/purge | every 10 min | → `resume-processor` | needs WORKER_SECRET; scanning needs a scanner |
+| Deletion clean-up (auth identity, files) | every 10 min | → `privacy-worker` | needs WORKER_SECRET |
 
 ## 3. Daily review (pilot)
 
@@ -43,16 +47,13 @@ until updated. That is intentional (it closes security holes) and acceptable dur
 ## 4. Backups and restore drill
 
 * Supabase takes daily backups on paid plans; Point-in-Time Recovery is an add-on. **Owner decision**: Pro plan with PITR is recommended before real users.
-* Before every migration, take a logical backup:
-  `supabase db dump --linked -f backups/$(date +%F)-schema.sql` and `supabase db dump --linked --data-only -f backups/$(date +%F)-data.sql`.
-  Store these encrypted outside the repo (they contain personal data). `backups/` is git-ignored.
+* Before every migration the `apply` action takes an encrypted logical backup (schema, data, roles) as a 30-day workflow artifact. The repository is public, so backups are GPG-encrypted with `BACKUP_PASSPHRASE`; keep that passphrase in the owner's password manager. Run action `backup` on its own at any time.
 * **Restore drill (monthly; first before the pilot):**
   1. Create a scratch Supabase project (free tier is fine).
   2. `psql "$SCRATCH_DB_URL" -f <schema.sql>` then `-f <data.sql>`.
   3. Run `select count(*) from public.profiles; select count(*) from public.jobs; select count(*) from public.applications;` and compare with production.
   4. Record date, duration, row counts and problems in `docs/drills.md`. Delete the scratch project.
-* What I could verify without access: every migration applies cleanly from an empty database in order (CI `test:db`).
-  A restore against real dumps has **not** been performed and is listed in OWNER_ACTIONS.
+* Verified so far: every migration applies in order from an empty database, and the v1.4.0 migrations apply on top of a reconstruction of the v1.3.0 production schema with data (`tests/db/review-fixes.test.mjs`, upgrade-path test). **No real backup has been taken and no restore drill has been performed.**
 
 ## 5. Incident response
 
@@ -77,7 +78,8 @@ sign in as test employer → jobs and applicants load → admin console overview
 | Secret | Where it lives | Rotate |
 |--------|----------------|--------|
 | Supabase publishable key | GitHub variable `EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY`, app builds | Dashboard → API keys → create new publishable key, update the GitHub variable, rebuild web and apps, then revoke the old key after users update |
-| Supabase secret / service-role key | Supabase function env (automatic), owner's password manager, Cron job header | Dashboard → API keys → roll; update Cron header and any machine running `purge-storage.mjs` |
+| Supabase secret / service-role key | Supabase function env (automatic), owner's password manager | Dashboard → API keys → roll; Edge Functions pick up the new key automatically |
+| WORKER_SECRET | `supabase secrets` and GitHub secret | generate a new random value, set it in both places within minutes |
 | DB password | password manager, GitHub secret `SUPABASE_DB_PASSWORD` | Dashboard → Database → reset password; update the GitHub secret |
 | Email provider key | `supabase secrets` | create a new key at the provider, `supabase secrets set EMAIL_API_KEY=...`, revoke old |
 | Android upload keystore | GitHub secrets `ANDROID_*` + offline backup | only if compromised: request upload-key reset in Play Console |

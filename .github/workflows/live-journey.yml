@@ -1,0 +1,40 @@
+name: Live journey (deployed site)
+
+# Runs the real-UI marketplace journey against the DEPLOYED website and production Supabase.
+# Creates qa+<run>-...@getkaamsetu.in accounts and deletes them through the product's own deletion flow at the end.
+# Secrets: LIVE_ADMIN_EMAIL, LIVE_ADMIN_PASSWORD (a dedicated test administrator granted by the owner).
+on:
+  workflow_dispatch:
+    inputs:
+      base_url:
+        description: Site to test
+        default: https://www.getkaamsetu.in
+
+permissions:
+  contents: read
+
+concurrency:
+  group: live-journey
+  cancel-in-progress: false
+
+jobs:
+  journey:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Read-only production verification first
+        run: node scripts/verify-production.mjs --expect-schema 202611200004 --site "${{ inputs.base_url }}"
+      - run: npx playwright install --with-deps chromium
+      - name: Real UI journey
+        env:
+          LIVE_BASE_URL: ${{ inputs.base_url }}
+          LIVE_ADMIN_EMAIL: ${{ secrets.LIVE_ADMIN_EMAIL }}
+          LIVE_ADMIN_PASSWORD: ${{ secrets.LIVE_ADMIN_PASSWORD }}
+        run: npx playwright test --config e2e/live/playwright.live.config.ts
+      # Traces can contain typed form values, so they are not uploaded from live runs.

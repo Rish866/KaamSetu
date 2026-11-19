@@ -182,7 +182,7 @@ test('viewers can read but not act; last owner cannot be removed', async () => {
   assert.match(await failure(api.as(viewer, (s) => s('select * from public.list_job_applicants($1)', [job1]))) ?? '', /not found/i, 'deactivated members lose access');
 });
 
-test('audit log and consent history are immutable even for the table owner', async () => {
+test('audit log, consent and application history reject UPDATE (DELETE/TRUNCATE covered in review-fixes)', async () => {
   assert.match(await failure(api.q('update private.audit_events set action=$1', ['x'])) ?? '', /immutable/);
   assert.match(await failure(api.q('delete from private.audit_events')) ?? '', /immutable/);
   assert.match(await failure(api.q(`update public.consent_records set action='withdrawn'`)) ?? '', /immutable/);

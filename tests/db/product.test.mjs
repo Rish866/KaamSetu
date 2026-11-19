@@ -91,7 +91,7 @@ test('resume extraction is applied only after consent and explicit acceptance', 
   assert.equal((await rpc(other, 'select * from public.resume_extractions')).length, 0);
 });
 
-test('data export contains only the caller\'s data; deletion anonymises and frees identifiers', async () => {
+test('data export contains only the caller\'s data; deletion anonymises; email/phone are freed only after the auth scrub (scrub simulated in SQL)', async () => {
   const c = await makeCandidate(api, 'Export Me', { discovery: true });
   const a = (await rpc(c, 'select public.apply_to_job($1) id', [jobB]))[0].id;
   const dump = (await rpc(c, 'select public.request_data_export() d'))[0].d;

@@ -22,9 +22,20 @@ test.describe('production build is honest and safe', () => {
     });
   }
 
-  test('sign-up enforces a strong password and admin sign-up is impossible', async ({ page }) => {
+  test('sign-up rejects a weak password before contacting the server, and admin sign-up is impossible', async ({ page }) => {
     await page.goto('/login?role=candidate');
-    await expect(page.getByRole('button', { name: /create|sign up|register/i }).first()).toBeVisible();
+    await page.getByRole('button', { name: 'Create account' }).click();
+    await page.getByRole('textbox', { name: 'Full name' }).fill('Weak Password Tester');
+    await page.getByRole('textbox', { name: 'Email address' }).fill('weak@example.test');
+    await page.getByRole('textbox', { name: 'Password', exact: true }).fill('password1');
+    await page.getByRole('textbox', { name: 'Confirm password' }).fill('password1');
+    await page.getByRole('checkbox').click();
+    await page.getByRole('button', { name: 'Create my account' }).click();
+    await expect(page.getByRole('alert')).toContainText('at least 10 characters');
+    await page.getByRole('textbox', { name: 'Password', exact: true }).fill('Password1234');
+    await page.getByRole('textbox', { name: 'Confirm password' }).fill('Password1234');
+    await page.getByRole('button', { name: 'Create my account' }).click();
+    await expect(page.getByRole('alert')).toContainText('too common');
     await page.goto('/login?role=admin');
     await expect(page.getByText(/only by the platform owner|granted only by the platform owner/i).first()).toBeVisible();
     await expect(page.getByRole('button', { name: 'Create account' })).toBeDisabled();

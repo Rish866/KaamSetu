@@ -102,7 +102,7 @@ export default function LoginScreen() {
   async function submit() {
     const authCredentials = credentials();
     if (!authCredentials) return setMessage(identityKind === 'email' ? 'Enter a valid email address.' : 'Enter a valid 10-digit Indian mobile number.');
-    if (password.length < 8) return setMessage('Enter your password.');
+    if (mode === 'sign-in' && !password) return setMessage('Enter your password.');
     if (mode === 'sign-up') {
       const weak = validatePassword(password); if (weak) return setMessage(weak);
       if (loginRole === 'admin') return setMessage('Administrator accounts can only be created by the platform owner.');
