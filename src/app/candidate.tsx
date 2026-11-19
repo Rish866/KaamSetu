@@ -27,7 +27,6 @@ export default function CandidateScreen() {
     if (!session) return;
     setLive(true);
     setName(session.user.user_metadata?.display_name ?? 'KaamSetu member');
-    await supabase.from('candidate_profiles').upsert({ user_id: session.user.id }, { onConflict: 'user_id', ignoreDuplicates: true });
     const [profile, jobResult, applicationResult, invitationResult] = await Promise.all([
       supabase.from('candidate_profiles').select('discovery_enabled').eq('user_id', session.user.id).single(),
       supabase.from('jobs').select('id,title,salary_min,salary_max,salary_period,work_mode,published_at,companies(display_name,verification_status),locations(city,locality),job_skills(skills(name))').eq('status', 'published').order('published_at', { ascending: false }),
@@ -57,21 +56,14 @@ export default function CandidateScreen() {
 
   async function applyToJob(jobId: string) {
     if (!live) return apply(jobId);
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session) return;
-    const { error } = await supabase.from('applications').insert({ job_id: jobId, candidate_id: session.user.id });
-    if (!error) setLiveApplications((value) => value.includes(jobId) ? value : [...value, jobId]);
+    const { error } = await supabase.rpc('apply_to_job', { p_job: jobId });
+    if (!error || error.code === '23505') setLiveApplications((value) => value.includes(jobId) ? value : [...value, jobId]);
   }
 
   async function changeDiscovery(enabled: boolean) {
     if (!live) return setDiscoveryEnabled(enabled);
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session) return;
-    const { error } = await supabase.from('candidate_profiles').update({ discovery_enabled: enabled, updated_at: new Date().toISOString() }).eq('user_id', session.user.id);
-    if (!error) {
-      setLiveDiscovery(enabled);
-      await supabase.from('consent_records').insert({ user_id: session.user.id, purpose: 'employer_discovery', action: enabled ? 'granted' : 'withdrawn', notice_version: '2026-11-18' });
-    }
+    const { error } = await supabase.rpc('set_consent', { p_purpose: 'employer_discovery', p_granted: enabled, p_notice_version: '2026-11-18' });
+    if (!error) setLiveDiscovery(enabled);
   }
 
   return <AppShell role={live ? 'Candidate' : 'Candidate demo'} title={`Good morning, ${name}`} subtitle={live ? `${liveJobs.length} published jobs available now` : 'Three new jobs fit your preferences'}>

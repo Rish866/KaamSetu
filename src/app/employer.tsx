@@ -14,11 +14,11 @@ export default function EmployerScreen() {
   const { width } = useWindowDimensions(); const compact = width < 720;
   const { invitedCandidates, invite } = useDemo();
   const [live, setLive] = useState(false);
-  const [company, setCompany] = useState<{ id: string; display_name: string; city: string | null; verification_status: string } | null>(null);
+  const [company, setCompany] = useState<{ id: string; display_name: string; city: string | null; verification_status: string; verification_reason: string | null } | null>(null);
   const [jobCount, setJobCount] = useState(0);
-  const [legalName, setLegalName] = useState('Aarvya Global Ventures LLP');
-  const [displayName, setDisplayName] = useState('KaamSetu');
-  const [city, setCity] = useState('Navi Mumbai');
+  const [legalName, setLegalName] = useState('');
+  const [displayName, setDisplayName] = useState('');
+  const [city, setCity] = useState('');
   const [message, setMessage] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -28,17 +28,30 @@ export default function EmployerScreen() {
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) return;
     setLive(true);
-    const { data } = await supabase.from('company_members').select('company_id, companies(id, display_name, city, verification_status)').eq('user_id', session.user.id).eq('active', true).maybeSingle();
-    const linked = data?.companies as unknown as { id: string; display_name: string; city: string | null; verification_status: string } | null;
+    const { data } = await supabase.from('company_members').select('company_id, companies(id, display_name, city, verification_status, verification_reason)').eq('user_id', session.user.id).eq('active', true).maybeSingle();
+    const linked = data?.companies as unknown as { id: string; display_name: string; city: string | null; verification_status: string; verification_reason: string | null } | null;
     if (!linked) return;
     setCompany(linked);
     const { count } = await supabase.from('jobs').select('id', { count: 'exact', head: true }).eq('company_id', linked.id);
     setJobCount(count ?? 0);
   }
 
+  const [idType, setIdType] = useState<'gstin' | 'cin' | 'llpin' | 'domain'>('gstin');
+  const [idValue, setIdValue] = useState('');
+
+  async function submitVerification() {
+    if (!company) return;
+    setBusy(true); setMessage(null);
+    const { error } = await supabase.rpc('submit_company_verification', { p_company: company.id, p_identifier_type: idType, p_identifier_value: idValue });
+    setBusy(false);
+    if (error) return setMessage(error.message);
+    setIdValue('');
+    await loadEmployer();
+  }
+
   async function createCompany() {
     setBusy(true); setMessage(null);
-    const { error } = await supabase.rpc('create_employer_company', { legal_name: legalName, display_name: displayName, city, website: 'https://getkaamsetu.in' });
+    const { error } = await supabase.rpc('create_employer_company', { legal_name: legalName, display_name: displayName, city, website: null });
     setBusy(false);
     if (error) return setMessage(error.message);
     await loadEmployer();
@@ -46,6 +59,12 @@ export default function EmployerScreen() {
 
   if (live && !company) return <AppShell role="Employer" title="Set up your company" subtitle="Company verification protects candidates from impersonation">
     <Card style={styles.onboarding}><Pill tone="saffron">Verification required</Pill><Text style={styles.onboardTitle}>Create your employer workspace</Text><Text style={styles.cardText}>Use the registered legal name. Jobs remain private until the trust team verifies the company.</Text><Field label="Registered company name" value={legalName} onChangeText={setLegalName} /><Field label="Public brand name" value={displayName} onChangeText={setDisplayName} /><Field label="City" value={city} onChangeText={setCity} />{message && <Text style={styles.error}>{message}</Text>}<PrimaryButton label={busy ? 'Creating workspace…' : 'Create employer workspace'} disabled={busy} onPress={createCompany} icon="business-outline" /></Card>
+  </AppShell>;
+
+  if (live && company && (company.verification_status === 'draft' || company.verification_status === 'rejected')) return <AppShell role="Employer" title={`${company.display_name}: verify your company`} subtitle="Only verified companies can publish jobs or discover candidates">
+    <Card style={styles.onboarding}><Pill tone="saffron">{company.verification_status === 'rejected' ? 'Verification rejected' : 'Verification needed'}</Pill>{company.verification_reason && <Text style={styles.cardText}>Reviewer note: {company.verification_reason}</Text>}<Text style={styles.cardText}>Enter one official identifier for your registered company. The trust team will review it.</Text>
+      <View style={styles.titleRow}>{(['gstin', 'cin', 'llpin', 'domain'] as const).map((t) => <PrimaryButton key={t} label={t.toUpperCase()} variant={idType === t ? 'primary' : 'secondary'} onPress={() => setIdType(t)} />)}</View>
+      <Field label={idType === 'domain' ? 'Company website domain' : `${idType.toUpperCase()} number`} value={idValue} onChangeText={setIdValue} autoCapitalize="characters" />{message && <Text style={styles.error}>{message}</Text>}<PrimaryButton label={busy ? 'Submitting…' : 'Submit for verification'} disabled={busy || idValue.trim().length < 4} onPress={submitVerification} icon="shield-checkmark-outline" /></Card>
   </AppShell>;
 
   return <AppShell role={live ? 'Employer' : 'Employer demo'} title={live && company ? `${company.display_name} hiring desk` : 'HarbourCloud hiring desk'} subtitle={live && company ? `${company.verification_status === 'approved' ? 'Verified' : 'Verification pending'} · ${company.city ?? 'India'}` : 'Verified company · Navi Mumbai'}>
