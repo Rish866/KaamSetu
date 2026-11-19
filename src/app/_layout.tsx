@@ -2,11 +2,10 @@ import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
 import { AuthProvider, useAuth } from '../state/AuthContext';
-import { DemoProvider } from '../state/DemoContext';
 import { colors } from '../theme';
 
 export default function RootLayout() {
-  return <AuthProvider><DemoProvider><StatusBar style="dark" /><RootNavigator /></DemoProvider></AuthProvider>;
+  return <AuthProvider><StatusBar style="dark" /><RootNavigator /></AuthProvider>;
 }
 
 function RootNavigator() {
@@ -17,6 +16,9 @@ function RootNavigator() {
     <Stack.Screen name="index" />
     <Stack.Screen name="login" />
     <Stack.Screen name="reset-password" />
+    <Stack.Screen name="privacy" />
+    <Stack.Screen name="terms" />
+    <Stack.Screen name="support" />
     <Stack.Protected guard={active && access?.account_kind === 'candidate'} redirectTo="/login">
       <Stack.Screen name="candidate" />
     </Stack.Protected>

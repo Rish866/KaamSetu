@@ -1,3 +1,4 @@
+import { validatePassword } from '../lib/password';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import React, { useState } from 'react';
@@ -13,7 +14,7 @@ export default function ResetPasswordScreen() {
   const [message, setMessage] = useState<string | null>(null);
 
   async function updatePassword() {
-    if (password.length < 8) return setMessage('Use a password with at least 8 characters.');
+    const weak = validatePassword(password); if (weak) return setMessage(weak);
     if (password !== confirmPassword) return setMessage('The passwords do not match.');
     setBusy(true);
     setMessage(null);

@@ -1,7 +1,8 @@
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import { Pressable, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { Card, Logo, PrimaryButton } from '../components/ui';
+import { friendlyError } from '../lib/format';
 import { supabase } from '../lib/supabase';
 import { colors } from '../theme';
 
@@ -10,6 +11,7 @@ const workModes = [['onsite', 'On-site'], ['hybrid', 'Hybrid'], ['remote', 'Remo
 const employmentTypes = [['full_time', 'Full-time'], ['part_time', 'Part-time'], ['contract', 'Contract'], ['internship', 'Internship']] as const;
 
 export default function PostJobScreen() {
+  const { id: editId } = useLocalSearchParams<{ id?: string }>();
   const [companyId, setCompanyId] = useState<string | null>(null);
   const [approved, setApproved] = useState(false);
   const [userId, setUserId] = useState<string | null>(null);
@@ -42,8 +44,16 @@ export default function PostJobScreen() {
     ]);
     setLocations((loc.data ?? []).map((l) => ({ id: l.id, label: l.locality ? `${l.locality}, ${l.city}` : l.city })));
     setSkills((sk.data ?? []).map((k) => ({ id: k.id, label: k.name })));
+    if (editId) {
+      const [j, js] = await Promise.all([supabase.from('jobs').select('*').eq('id', editId).eq('company_id', data.company_id).single(), supabase.from('job_skills').select('skill_id').eq('job_id', editId)]);
+      if (j.error || !j.data || !['draft', 'rejected'].includes(j.data.status)) return setMessage('Only drafts and rejected jobs can be edited.');
+      const d = j.data;
+      setTitle(d.title); setDescription(d.description); setSalaryMin(String(d.salary_min)); setSalaryMax(String(d.salary_max)); setExpMin(String(d.experience_min_months / 12));
+      setExpMax(d.experience_max_months === null ? '' : String(d.experience_max_months / 12)); setWorkMode(d.work_mode); setEmploymentType(d.employment_type); setLocationId(d.location_id); setSkillIds((js.data ?? []).map((x) => x.skill_id));
+    }
   }
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { void Promise.resolve().then(loadAccount); }, []);
 
   async function save(submitForReview: boolean) {
@@ -57,27 +67,33 @@ export default function PostJobScreen() {
     if (workMode !== 'remote' && !locationId) return setMessage('Choose the job location.');
     if (skillIds.length === 0) return setMessage('Choose at least one required skill.');
     setBusy(true); setMessage(null);
-    const { data, error } = await supabase.from('jobs').insert({
-      company_id: companyId, title: title.trim(), description: description.trim(),
-      salary_min: min, salary_max: max, salary_period: 'annual',
-      experience_min_months: eMin, experience_max_months: eMax,
-      location_id: workMode === 'remote' ? null : locationId, work_mode: workMode, employment_type: employmentType,
-      vacancies: 1, created_by: userId,
-    }).select('id').single();
-    if (error || !data) { setBusy(false); return setMessage(error?.message ?? 'The job could not be saved.'); }
-    const skillResult = await supabase.from('job_skills').insert(skillIds.map((skill_id) => ({ job_id: data.id, skill_id })));
-    if (skillResult.error) { setBusy(false); return setMessage(skillResult.error.message); }
+    const payload = {
+      title: title.trim(), description: description.trim(), salary_min: min, salary_max: max, salary_period: 'annual',
+      experience_min_months: eMin, experience_max_months: eMax, location_id: workMode === 'remote' ? null : locationId, work_mode: workMode, employment_type: employmentType, vacancies: 1,
+    };
+    let jobId = editId ?? null;
+    if (jobId) {
+      const { error } = await supabase.from('jobs').update({ ...payload, updated_at: new Date().toISOString() }).eq('id', jobId);
+      if (error) { setBusy(false); return setMessage(friendlyError(error)); }
+      await supabase.from('job_skills').delete().eq('job_id', jobId);
+    } else {
+      const { data, error } = await supabase.from('jobs').insert({ ...payload, company_id: companyId, created_by: userId }).select('id').single();
+      if (error || !data) { setBusy(false); return setMessage(friendlyError(error)); }
+      jobId = data.id;
+    }
+    const skillResult = await supabase.from('job_skills').insert(skillIds.map((skill_id) => ({ job_id: jobId!, skill_id })));
+    if (skillResult.error) { setBusy(false); return setMessage(friendlyError(skillResult.error)); }
     if (submitForReview) {
-      const submitted = await supabase.rpc('submit_job_for_review', { p_job: data.id });
-      if (submitted.error) { setBusy(false); return setMessage(`Saved as a draft. ${submitted.error.message}`); }
+      const submitted = await supabase.rpc('submit_job_for_review', { p_job: jobId });
+      if (submitted.error) { setBusy(false); return setMessage(`Saved as a draft. ${friendlyError(submitted.error)}`); }
     }
     setBusy(false);
-    router.replace('/employer');
+    router.replace('/employer/jobs');
   }
 
   const toggle = (id: string) => setSkillIds((value) => value.includes(id) ? value.filter((x) => x !== id) : [...value, id]);
 
-  return <SafeAreaView style={styles.safe}><ScrollView contentContainerStyle={styles.page}><View style={styles.head}><Logo /><PrimaryButton label="Back" variant="ghost" onPress={() => router.back()} /></View><Card style={styles.card}><Text style={styles.title}>Post a job</Text><Text style={styles.sub}>Salary visibility is required. Jobs are reviewed by the trust team before they become public.{approved ? '' : ' Your company must be verified before you can submit a job for review. You can still save drafts.'}</Text>
+  return <SafeAreaView style={styles.safe}><ScrollView contentContainerStyle={styles.page}><View style={styles.head}><Logo /><PrimaryButton label="Back" variant="ghost" onPress={() => router.back()} /></View><Card style={styles.card}><Text style={styles.title}>{editId ? 'Edit job' : 'Post a job'}</Text><Text style={styles.sub}>Salary visibility is required. Jobs are reviewed by the trust team before they become public.{approved ? '' : ' Your company must be verified before you can submit a job for review. You can still save drafts.'}</Text>
     <Field label="Job title" value={title} onChangeText={setTitle} placeholder="Customer Success Executive" />
     <Field label="Description" value={description} onChangeText={setDescription} placeholder="Describe the responsibilities, requirements and work schedule" multiline />
     <Choice label="Work mode" options={workModes.map(([id, label]) => ({ id, label }))} selected={[workMode]} onToggle={(id) => setWorkMode(id as typeof workMode)} />

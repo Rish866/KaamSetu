@@ -1,31 +1,47 @@
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Href, Link, router, usePathname } from 'expo-router';
-import React, { PropsWithChildren } from 'react';
+import React, { PropsWithChildren, useEffect, useState } from 'react';
 import { Pressable, SafeAreaView, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { supabase } from '../lib/supabase';
 import { useAuth } from '../state/AuthContext';
 import { colors } from '../theme';
 import { Logo, Pill } from './ui';
 
-const navigation: { label: string; href: Href; icon: keyof typeof Ionicons.glyphMap }[] = [
-  { label: 'Candidate', href: '/candidate', icon: 'person-outline' },
-  { label: 'Employer', href: '/employer', icon: 'business-outline' },
-  { label: 'Admin', href: '/admin', icon: 'shield-checkmark-outline' },
+type NavItem = { label: string; href: Href; icon: keyof typeof Ionicons.glyphMap };
+const candidateNav: NavItem[] = [
+  { label: 'Jobs', href: '/candidate', icon: 'briefcase-outline' },
+  { label: 'Applications', href: '/candidate/applications', icon: 'paper-plane-outline' },
+  { label: 'Profile', href: '/candidate/profile', icon: 'person-outline' },
+  { label: 'Alerts', href: '/candidate/notifications', icon: 'notifications-outline' },
+  { label: 'Settings', href: '/candidate/settings', icon: 'settings-outline' },
 ];
+const employerNav: NavItem[] = [
+  { label: 'Overview', href: '/employer', icon: 'grid-outline' },
+  { label: 'Jobs', href: '/employer/jobs', icon: 'briefcase-outline' },
+  { label: 'Discover', href: '/employer/discover', icon: 'search-outline' },
+  { label: 'Team', href: '/employer/team', icon: 'people-outline' },
+  { label: 'Alerts', href: '/employer/notifications', icon: 'notifications-outline' },
+];
+const adminNav: NavItem[] = [{ label: 'Admin', href: '/admin', icon: 'shield-checkmark-outline' }];
 
 export function AppShell({ children, title, subtitle, role }: PropsWithChildren<{ title: string; subtitle: string; role: string }>) {
   const pathname = usePathname();
   const { access, signOut } = useAuth();
   const { width } = useWindowDimensions();
   const desktop = width >= 900;
-  const allowedNavigation = navigation.filter((item) => item.href === `/${access?.account_kind}` || (item.href === '/admin' && access?.is_admin));
+  const allowedNavigation = pathname.startsWith('/admin') ? adminNav : access?.account_kind === 'employer' ? employerNav : candidateNav;
+  const activeHref = [...allowedNavigation].sort((x, y) => String(y.href).length - String(x.href).length).find((i) => pathname === i.href || pathname.startsWith(`${String(i.href)}/`))?.href;
+  const [unread, setUnread] = useState(0);
+  useEffect(() => { void supabase.from('notifications').select('id', { count: 'exact', head: true }).is('read_at', null).then(({ count }) => setUnread(count ?? 0)); }, [pathname]);
+  const alertsHref: Href = access?.account_kind === 'employer' ? '/employer/notifications' : '/candidate/notifications';
   const initials = access?.display_name.split(/\s+/).slice(0, 2).map((part) => part[0]).join('').toUpperCase() || 'KS';
   async function logOut() { await signOut(); router.replace('/login'); }
   return <SafeAreaView style={styles.safe}><View style={styles.shell}>
     {desktop && <LinearGradient colors={['#191D3E', '#11152D', '#0E1A30']} start={{ x: 0, y: 0 }} end={{ x: 0.8, y: 1 }} style={styles.sidebar}>
       <Link href="/" asChild><Pressable><Logo inverted /></Pressable></Link>
       <View style={styles.sideNav}>{allowedNavigation.map((item) => {
-        const active = pathname === item.href;
+        const active = item.href === activeHref;
         return <Link href={item.href} asChild key={item.label}><Pressable style={StyleSheet.flatten([styles.navItem, active && styles.navItemActive])}>
           <View style={[styles.navIcon, active && styles.navIconActive]}><Ionicons name={item.icon} size={19} color={active ? '#FFFFFF' : '#9FA6BF'} /></View>
           <Text style={[styles.navText, active && styles.navTextActive]}>{item.label}</Text>{active && <View style={styles.activeDot} />}
@@ -37,11 +53,11 @@ export function AppShell({ children, title, subtitle, role }: PropsWithChildren<
       <View style={styles.topbar}>
         {!desktop && <Link href="/" asChild><Pressable><Logo compact /></Pressable></Link>}
         <View style={styles.titleWrap}><Pill tone="neutral">{role}</Pill><Text style={styles.pageTitle}>{title}</Text><Text style={styles.subtitle}>{subtitle}</Text></View>
-        <View style={styles.topActions}>{desktop && <View style={styles.searchHint}><Ionicons name="search-outline" size={18} color={colors.inkSoft} /><Text style={styles.searchText}>Search anything</Text><View style={styles.keyHint}><Text style={styles.keyText}>⌘ K</Text></View></View>}<View style={styles.bell}><Ionicons name="notifications-outline" size={20} color={colors.ink} /><View style={styles.notificationDot} /></View><LinearGradient colors={['#FFF0D1', '#FFD89A']} style={styles.avatar}><Text style={styles.avatarText}>{initials}</Text></LinearGradient><Pressable accessibilityLabel="Sign out" onPress={logOut} style={styles.logout}><Ionicons name="log-out-outline" size={20} color={colors.ink} /></Pressable></View>
+        <View style={styles.topActions}><Link href={alertsHref} asChild><Pressable accessibilityRole="link" accessibilityLabel={`Notifications, ${unread} unread`} style={styles.bell}><Ionicons name="notifications-outline" size={20} color={colors.ink} />{unread > 0 && <View style={styles.badge}><Text style={styles.badgeText}>{unread > 9 ? '9+' : unread}</Text></View>}</Pressable></Link><LinearGradient colors={['#FFF0D1', '#FFD89A']} style={styles.avatar}><Text style={styles.avatarText}>{initials}</Text></LinearGradient><Pressable accessibilityLabel="Sign out" onPress={logOut} style={styles.logout}><Ionicons name="log-out-outline" size={20} color={colors.ink} /></Pressable></View>
       </View>
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>{children}</ScrollView>
       {!desktop && <View style={styles.bottomNav}>{allowedNavigation.map((item) => {
-        const active = pathname === item.href;
+        const active = item.href === activeHref;
         return <Link href={item.href} asChild key={item.label}><Pressable style={styles.bottomItem}><View style={[styles.bottomIcon, active && styles.bottomIconActive]}><Ionicons name={item.icon} size={20} color={active ? colors.teal : colors.inkSoft} /></View><Text style={[styles.bottomText, active && styles.bottomTextActive]}>{item.label}</Text></Pressable></Link>;
       })}</View>}
     </View>
@@ -49,6 +65,7 @@ export function AppShell({ children, title, subtitle, role }: PropsWithChildren<
 }
 
 const styles = StyleSheet.create({
+  badge: { position: 'absolute', minWidth: 18, height: 18, borderRadius: 9, backgroundColor: colors.coral, right: 4, top: 4, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 4 }, badgeText: { color: '#fff', fontSize: 11, fontWeight: '900' },
   safe: { flex: 1, backgroundColor: colors.cream }, shell: { flex: 1, flexDirection: 'row' }, main: { flex: 1 },
   sidebar: { width: 252, padding: 24, justifyContent: 'space-between' }, sideNav: { flex: 1, marginTop: 52, gap: 9 },
   navItem: { minHeight: 52, paddingHorizontal: 10, borderRadius: 16, flexDirection: 'row', alignItems: 'center', gap: 11 }, navItemActive: { backgroundColor: 'rgba(117,118,255,0.18)', borderWidth: 1, borderColor: 'rgba(174,176,255,0.16)' },

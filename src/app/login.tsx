@@ -15,6 +15,7 @@ import {
 } from 'react-native';
 import { Card, Logo, Pill, PrimaryButton } from '../components/ui';
 import { supabase } from '../lib/supabase';
+import { validatePassword } from '../lib/password';
 import { AccountKind, useAuth } from '../state/AuthContext';
 import { colors } from '../theme';
 
@@ -94,8 +95,9 @@ export default function LoginScreen() {
   async function submit() {
     const authCredentials = credentials();
     if (!authCredentials) return setMessage(identityKind === 'email' ? 'Enter a valid email address.' : 'Enter a valid 10-digit Indian mobile number.');
-    if (password.length < 8) return setMessage('Use a password with at least 8 characters.');
+    if (password.length < 8) return setMessage('Enter your password.');
     if (mode === 'sign-up') {
+      const weak = validatePassword(password); if (weak) return setMessage(weak);
       if (loginRole === 'admin') return setMessage('Administrator accounts can only be created by the platform owner.');
       if (!name.trim()) return setMessage('Please enter your full name.');
       if (password !== confirmPassword) return setMessage('The passwords do not match.');

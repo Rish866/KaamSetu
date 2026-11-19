@@ -108,6 +108,7 @@ test('data export contains only the caller\'s data; deletion anonymises and free
   await api.as(c, (s) => s(`select public.register_resume($1,'d.pdf','application/pdf',700,$2)`, [`${c.id}/d.pdf`, '1'.repeat(64)]));
   const res = (await api.as(admin, (s) => s('select public.admin_process_deletion($1,$2) r', [rid, 'Verified identity by email'])) ).rows[0].r;
   assert.deepEqual(res.storage_paths_to_purge, [`${c.id}/d.pdf`]);
+  assert.equal((await api.as(admin, (s) => s(`select * from storage.objects where bucket_id='resumes'`))).rows.length, 0, 'admins cannot read resume files, so purging is a service-role job');
   const p = (await api.q('select display_name,email,phone,status from public.profiles where id=$1', [c.id])).rows[0];
   assert.deepEqual(p, { display_name: 'Deleted user', email: null, phone: null, status: 'deleted' });
   assert.equal((await api.q('select count(*)::int n from public.candidate_skills where candidate_id=$1', [c.id])).rows[0].n, 0);

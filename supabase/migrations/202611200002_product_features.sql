@@ -382,6 +382,7 @@ begin
     raise exception 'The user is the only owner of a company. Transfer ownership first.' using errcode = '55000';
   end if;
   select coalesce(array_agg(storage_path), '{}') into paths from public.resumes where candidate_id = pr.user_id;
+  paths := paths || coalesce((select array_agg('photo:' || photo_path) from public.candidate_profiles where user_id = pr.user_id and photo_path is not null), '{}');
   update public.resumes set deleted_at = coalesce(deleted_at, now()), active = false where candidate_id = pr.user_id;
   delete from public.candidate_skills where candidate_id = pr.user_id;
   delete from public.candidate_locations where candidate_id = pr.user_id;
