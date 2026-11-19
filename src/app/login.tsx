@@ -175,11 +175,11 @@ export default function LoginScreen() {
 }
 
 function ModeButton({ active, disabled, label, onPress }: { active: boolean; disabled?: boolean; label: string; onPress: () => void }) {
-  return <Pressable disabled={disabled} onPress={onPress} style={[styles.modeButton, active && styles.modeButtonActive, disabled && styles.disabled]}><Text style={[styles.modeText, active && styles.modeTextActive]}>{label}</Text></Pressable>;
+  return <Pressable accessibilityRole="button" accessibilityState={{ selected: active, disabled }} disabled={disabled} onPress={onPress} style={[styles.modeButton, active && styles.modeButtonActive, disabled && styles.disabled]}><Text style={[styles.modeText, active && styles.modeTextActive]}>{label}</Text></Pressable>;
 }
 
 function Choice({ active, label, icon, onPress }: { active: boolean; label: string; icon: keyof typeof Ionicons.glyphMap; onPress: () => void }) {
-  return <Pressable onPress={onPress} style={[styles.choice, active && styles.choiceActive]}><Ionicons name={icon} size={20} color={active ? colors.teal : colors.inkSoft} /><Text style={[styles.choiceText, active && styles.choiceTextActive]}>{label}</Text></Pressable>;
+  return <Pressable accessibilityRole="button" accessibilityState={{ selected: active }} onPress={onPress} style={[styles.choice, active && styles.choiceActive]}><Ionicons name={icon} size={20} color={active ? colors.teal : colors.inkSoft} /><Text style={[styles.choiceText, active && styles.choiceTextActive]}>{label}</Text></Pressable>;
 }
 
 function Field({ label, prefix, rightIcon, onRightPress, ...props }: React.ComponentProps<typeof TextInput> & { label: string; prefix?: string; rightIcon?: keyof typeof Ionicons.glyphMap; onRightPress?: () => void }) {

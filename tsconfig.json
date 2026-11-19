@@ -6,6 +6,11 @@
   "exclude": [
     "tests",
     "dist",
-    "node_modules"
+    "node_modules",
+    "supabase/functions",
+    "e2e",
+    "playwright.config.ts",
+    "scripts",
+    ".cache"
   ]
 }

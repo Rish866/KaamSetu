@@ -1,16 +1,21 @@
 name: CI
 
 env:
-  EXPO_PUBLIC_SUPABASE_URL: ${{ vars.EXPO_PUBLIC_SUPABASE_URL }}
-  EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${{ vars.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY }}
+  EXPO_PUBLIC_SUPABASE_URL: ${{ vars.EXPO_PUBLIC_SUPABASE_URL || 'https://ci-placeholder.supabase.co' }}
+  EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${{ vars.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY || 'ci-placeholder' }}
+  EXPO_NO_TELEMETRY: 1
 
 on:
   pull_request:
   push:
     branches: [main]
 
+permissions:
+  contents: read
+
 jobs:
   verify:
+    name: Lint, types, unit, database and RLS tests
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -21,17 +26,50 @@ jobs:
       - run: npm ci
       - run: npm run lint
       - run: npm run typecheck
-      - run: npm run test:db
-      - run: npm audit --audit-level=high
+      - run: npm run test:unit
+      - name: Migration validation, RLS adversarial tests, workflow and journey tests
+        run: npm run test:db
+      - name: Generated database types are up to date
+        run: npm run gen:types && git diff --exit-code src/lib/database.types.ts
+      - name: Applied migrations are never edited
+        if: github.event_name == 'pull_request'
+        run: |
+          git fetch origin "${{ github.base_ref }}" --depth=1
+          changed=$(git diff --name-only --diff-filter=MD "origin/${{ github.base_ref }}" -- supabase/migrations || true)
+          if [ -n "$changed" ]; then echo "Existing migrations were modified or deleted: $changed"; exit 1; fi
+      - name: Dependency audit (high and critical)
+        run: npm audit --audit-level=high --omit=dev
+
+  web:
+    name: Web production build, browser, accessibility and responsive tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
       - run: npm run build:web
+      - name: No service-role secrets in the web bundle
+        run: |
+          if grep -rIl -E "service_role|sb_secret_|SUPABASE_SERVICE_ROLE" dist; then echo "Secret-like strings found in dist"; exit 1; fi
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:e2e
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-traces
+          path: test-results
 
   secret-scan:
+    name: Secret scan
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - name: Scan for committed secrets
+      - name: gitleaks
         run: |
           curl -sSfL https://github.com/gitleaks/gitleaks/releases/download/v8.21.2/gitleaks_8.21.2_linux_x64.tar.gz | tar -xz gitleaks
           ./gitleaks detect --source . --redact --no-banner

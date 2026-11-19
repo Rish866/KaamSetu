@@ -14,7 +14,7 @@ export function Pill({ children, tone = 'teal' }: PropsWithChildren<{ tone?: 'te
 }
 
 export function PrimaryButton({ label, onPress, icon, disabled = false, variant = 'primary', style }: { label: string; onPress?: () => void; icon?: keyof typeof Ionicons.glyphMap; disabled?: boolean; variant?: 'primary' | 'secondary' | 'ghost'; style?: StyleProp<ViewStyle> }) {
-  return <Pressable disabled={disabled} onPress={onPress} style={({ pressed }) => [styles.button, styles[`button_${variant}`], disabled && styles.buttonDisabled, pressed && !disabled && styles.pressed, style]}>
+  return <Pressable accessibilityRole="button" accessibilityLabel={label} accessibilityState={{ disabled }} disabled={disabled} onPress={onPress} style={({ pressed }) => [styles.button, styles[`button_${variant}`], disabled && styles.buttonDisabled, pressed && !disabled && styles.pressed, style]}>
     {variant === 'primary' && !disabled && <LinearGradient colors={['#6768ED', '#4B4CD0']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.buttonGradient} />}
     {icon && <Ionicons name={icon} size={18} color={variant === 'primary' ? '#fff' : colors.teal} />}
     <Text style={[styles.buttonText, variant !== 'primary' && styles.buttonTextAlt]}>{label}</Text>

@@ -101,10 +101,79 @@ jobs:
           path: release/KaamSetu-web-*.tar.gz
           if-no-files-found: error
 
+  android-aab:
+    name: Signed Android App Bundle (when signing is configured)
+    runs-on: ubuntu-latest
+    env:
+      HAS_SIGNING: ${{ secrets.ANDROID_KEYSTORE_BASE64 != '' }}
+    steps:
+      - uses: actions/checkout@v4
+        if: env.HAS_SIGNING == 'true'
+      - uses: actions/setup-node@v4
+        if: env.HAS_SIGNING == 'true'
+        with:
+          node-version: 22
+          cache: npm
+      - if: env.HAS_SIGNING == 'true'
+        run: npm ci && npx expo prebuild --platform android --no-install
+      - uses: actions/setup-java@v5
+        if: env.HAS_SIGNING == 'true'
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: gradle
+      - name: Build signed AAB
+        if: env.HAS_SIGNING == 'true'
+        working-directory: android
+        env:
+          KS_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          KS_PASS: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASS: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          echo "$KS_B64" | base64 -d > "$RUNNER_TEMP/upload.jks"
+          ./gradlew bundleRelease --no-daemon \
+            -Pandroid.injected.signing.store.file="$RUNNER_TEMP/upload.jks" \
+            -Pandroid.injected.signing.store.password="$KS_PASS" \
+            -Pandroid.injected.signing.key.alias="$KEY_ALIAS" \
+            -Pandroid.injected.signing.key.password="$KEY_PASS"
+          rm -f "$RUNNER_TEMP/upload.jks"
+          mkdir -p ../release && cp app/build/outputs/bundle/release/app-release.aab "../release/KaamSetu-${{ github.ref_name }}.aab"
+      - uses: actions/upload-artifact@v4
+        if: env.HAS_SIGNING == 'true'
+        with:
+          name: kaamsetu-android-aab
+          path: release/KaamSetu-*.aab
+      - name: Signing not configured
+        if: env.HAS_SIGNING != 'true'
+        run: echo "::notice::ANDROID_KEYSTORE_BASE64 is not set; skipping the signed Play Store bundle."
+
+  ios-testflight:
+    name: iOS TestFlight build (when Apple credentials are configured)
+    runs-on: ubuntu-latest
+    env:
+      HAS_EXPO: ${{ secrets.EXPO_TOKEN != '' }}
+    steps:
+      - uses: actions/checkout@v4
+        if: env.HAS_EXPO == 'true'
+      - uses: actions/setup-node@v4
+        if: env.HAS_EXPO == 'true'
+        with:
+          node-version: 22
+          cache: npm
+      - name: Build and submit with EAS
+        if: env.HAS_EXPO == 'true'
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+        run: npm ci && npx eas-cli@latest build --platform ios --profile production --non-interactive --auto-submit
+      - name: Apple signing not configured
+        if: env.HAS_EXPO != 'true'
+        run: echo "::notice::EXPO_TOKEN is not set; skipping TestFlight. Requires Apple Developer Program membership."
+
   github-release:
     name: Publish GitHub release
     if: startsWith(github.ref, 'refs/tags/')
-    needs: [android-apk, ios-simulator, website]
+    needs: [android-apk, ios-simulator, website, android-aab]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v4
@@ -112,15 +181,17 @@ jobs:
           pattern: kaamsetu-*
           path: release
           merge-multiple: true
+      - uses: actions/checkout@v4
+        with:
+          path: src
+      - name: Checksums and release notes
+        run: |
+          cd release && sha256sum * > SHA256SUMS.txt && cat SHA256SUMS.txt && cd ..
+          notes="src/docs/releases/${{ github.ref_name }}.md"
+          if [ -f "$notes" ]; then cp "$notes" release-notes.md; else echo "KaamSetu ${{ github.ref_name }}" > release-notes.md; fi
+          printf '\n\n## Assets\n- APK: installable Android test build\n- AAB: signed Play bundle (only when signing is configured)\n- iOS Simulator zip\n- Website archive\n- SHA256SUMS.txt\n' >> release-notes.md
       - uses: softprops/action-gh-release@v2
         with:
           name: KaamSetu ${{ github.ref_name }}
-          body: |
-            First KaamSetu cross-platform release.
-
-            - `KaamSetu-${{ github.ref_name }}.apk`: installable Android APK
-            - `KaamSetu-iOS-Simulator-${{ github.ref_name }}.zip`: iOS Simulator app bundle
-            - `KaamSetu-web-${{ github.ref_name }}.tar.gz`: production website export
-
-            A physical-iPhone/App Store IPA requires Apple Developer signing credentials.
+          body_path: release-notes.md
           files: release/*
