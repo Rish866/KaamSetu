@@ -12,18 +12,20 @@ export default function RootLayout() {
 
 // The database version this build needs. If production has not been migrated yet, show maintenance instead of errors.
 const REQUIRED_SCHEMA = '202611200004';
-type SchemaState = 'checking' | 'ok' | 'outdated';
+type SchemaState = 'unknown' | 'ok' | 'outdated';
 
+/** Never blocks rendering: the app renders normally and only switches to maintenance on a confirmed outdated schema. */
 function useSchemaCheck(): SchemaState {
-  const [state, setState] = useState<SchemaState>('checking');
+  const [state, setState] = useState<SchemaState>('unknown');
   useEffect(() => {
     let alive = true;
-    void supabase.rpc('schema_version').then(({ data, error }) => {
+    const timer = setTimeout(() => { alive = false; }, 8000);
+    void Promise.resolve(supabase.rpc('schema_version')).then(({ data, error }) => {
       if (!alive) return;
       // Missing function (PGRST202) or an older version means the database is behind this app. Network errors fall through to normal offline handling.
       if (error?.code === 'PGRST202' || (typeof data === 'string' && data < REQUIRED_SCHEMA)) setState('outdated'); else setState('ok');
-    });
-    return () => { alive = false; };
+    }, () => undefined).finally(() => clearTimeout(timer));
+    return () => { alive = false; clearTimeout(timer); };
   }, []);
   return state;
 }
@@ -32,7 +34,7 @@ function RootNavigator() {
   const { access, loading, session } = useAuth();
   const schema = useSchemaCheck();
   if (schema === 'outdated') return <View style={styles.loading}><Text accessibilityRole="header" style={styles.title}>KaamSetu is being updated</Text><Text style={styles.text}>We are upgrading the service. Please try again in a few minutes.</Text></View>;
-  if (loading || schema === 'checking') return <View style={styles.loading}><ActivityIndicator size="large" color={colors.teal} /></View>;
+  if (loading) return <View style={styles.loading}><ActivityIndicator size="large" color={colors.teal} /></View>;
   const active = Boolean(session && access?.status === 'active');
   return <Stack screenOptions={{ headerShown: false, animation: 'fade' }}>
     <Stack.Screen name="index" />

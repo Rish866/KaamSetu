@@ -46,6 +46,16 @@ test.describe('production build is honest and safe', () => {
   });
 });
 
+test('public pages render even when the backend never responds (slow or hung network)', async ({ page }) => {
+  await page.route(/supabase\.co/, () => { /* never fulfil: simulates a hung connection */ });
+  for (const p of ['/', '/login', '/privacy']) {
+    await page.goto(p);
+    await expect(page.locator('body')).not.toHaveText(/^\s*$/, { timeout: 5000 });
+  }
+  await page.goto('/'); await expect(page.getByText('How a match score works')).toBeVisible({ timeout: 5000 });
+  await page.goto('/login?role=candidate'); await expect(page.getByRole('button', { name: 'Sign in securely' })).toBeVisible({ timeout: 5000 });
+});
+
 test('pages load without console errors or CSP violations', async ({ page }) => {
   const problems: string[] = [];
   page.on('console', (m) => { if (m.type() === 'error' && !/Failed to load resource|supabase|fetch/i.test(m.text())) problems.push(m.text()); });
