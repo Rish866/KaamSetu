@@ -22,6 +22,7 @@ const employerNav: NavItem[] = [
   { label: 'Discover', href: '/employer/discover', icon: 'search-outline' },
   { label: 'Team', href: '/employer/team', icon: 'people-outline' },
   { label: 'Alerts', href: '/employer/notifications', icon: 'notifications-outline' },
+  { label: 'Settings', href: '/employer/settings', icon: 'settings-outline' },
 ];
 const adminNav: NavItem[] = [{ label: 'Admin', href: '/admin', icon: 'shield-checkmark-outline' }];
 

@@ -1,72 +1,38 @@
 # KaamSetu
 
-KaamSetu is a privacy-first recruitment marketplace for Mumbai, Navi Mumbai, Thane and Pune. This repository contains one Expo/React Native application that runs on the web, Android and iPhone.
+KaamSetu is a privacy-first, two-sided recruitment marketplace for Mumbai, Navi Mumbai, Thane and Pune, operated by
+Aarvya Global Ventures LLP. One Expo SDK 58 / React Native codebase serves the website (https://www.getkaamsetu.in),
+Android (`com.rish866.kaamsetu`) and iPhone. Data lives in Supabase (Postgres + RLS, Auth, private Storage).
 
-## Version 1.0
+There is no demo mode: every screen reads production data through row-level security and audited database functions.
 
-The complete cross-platform MVP includes:
+## What it does
+* **Candidates:** search verified, salary-visible jobs; explainable match scores; apply, withdraw, track timeline; respond to interviews and invitations; full profile and private resume; consent controls; data export and deletion.
+* **Employers:** verify the company, manage a team, draft and publish jobs through moderation, run a hiring pipeline, schedule interviews, make offers, discover consenting candidates.
+* **Administrators:** role-based trust and safety console (admin, moderator, support, privacy) with an immutable audit log.
 
-- Public product landing page
-- Candidate dashboard with explainable matches, discovery control and sample applications
-- Employer dashboard with hiring pipeline, masked candidate cards and invitations
-- Admin dashboard with company-verification decisions
-- Responsive desktop and mobile layouts
-- Initial PostgreSQL/Supabase schema, private resume storage and RLS policies
-- Pull-request checks and template
-
-All displayed people, companies and jobs are fictional. Version 1.0 ships in safe demo mode so it can be reviewed without collecting personal information or contacting real employers. The production-ready Supabase schema, row-level privacy rules and setup instructions are included for connecting the live service.
-
-## Run it
-
-Install dependencies:
-
+## Develop
 ```bash
-npm install
+npm ci
+cp .env.example .env            # publishable values only
+npm run web                     # dev server
+npm run lint && npm run typecheck
+npm run test:unit               # pure logic
+npm run test:db                 # migrations + 65 RLS, workflow, matching and journey tests (in-process Postgres)
+npm run build:web && npm run test:e2e   # browser, accessibility and responsive tests on the production build
+npm run gen:types               # regenerate src/lib/database.types.ts after a migration
 ```
 
-Start the website:
+Rules: never edit an applied migration (add a new timestamped file); never put a secret/service key in `EXPO_PUBLIC_*`;
+every new table needs RLS and a negative cross-account test in `tests/db`.
 
-```bash
-npm run web
-```
-
-Start for Android or iPhone development:
-
-```bash
-npm run android
-npm run ios
-```
-
-An Android emulator requires Android Studio. A local iPhone simulator requires macOS, but Expo cloud builds can produce both store-ready apps later.
-
-## Downloadable releases
-
-GitHub Actions produces three release packages from the same reviewed source:
-
-- Installable Android APK
-- iOS Simulator application bundle
-- Production website export
-
-The production configuration for a signed iPhone/TestFlight build is also included. Apple requires the owner to authenticate with an active Apple Developer account before a physical-iPhone build can be signed.
-
-## Quality checks
-
-```bash
-npm run typecheck
-npm run lint
-npm run doctor
-npm run build:web
-```
-
-## Connect the live backend
-
-1. Create a Supabase project in the Mumbai region.
-2. Copy `.env.example` to `.env` and enter the public project URL and publishable key.
-3. Link the Supabase CLI to the project.
-4. Review and apply `supabase/migrations/202611160001_initial.sql`.
-5. Apply `supabase/seed.sql`.
-6. Configure authentication email templates and redirect URLs.
-
-Do not put a Supabase secret/service key in the app. Those credentials bypass RLS and belong only in protected server jobs.
-
-See `docs/RELEASE.md` for build and signing details, `docs/PRIVACY.md` for the privacy notice draft, and `docs/IMPLEMENTATION_PLAN.md` for the full launch roadmap and acceptance criteria.
+## Documentation
+| File | Purpose |
+|------|---------|
+| docs/AUDIT.md | Findings, status of every work package |
+| docs/SECURITY.md | Security model, test evidence, pen-test checklist |
+| docs/PRIVACY.md | Consent, rights, retention, items for legal review |
+| docs/OPERATIONS.md | Deploy, schedules, daily review, backups and restore drill, incidents, secret rotation |
+| docs/PILOT.md | Controlled pilot plan and metrics |
+| docs/store/ | Store listing, privacy disclosures, reviewer accounts, checklists |
+| docs/OWNER_ACTIONS.md | Everything only the owner can do, in order |

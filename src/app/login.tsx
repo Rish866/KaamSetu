@@ -15,6 +15,7 @@ import {
 } from 'react-native';
 import { Card, Logo, Pill, PrimaryButton } from '../components/ui';
 import { supabase } from '../lib/supabase';
+import { NOTICE_VERSION } from '../content/legal';
 import { validatePassword } from '../lib/password';
 import { AccountKind, useAuth } from '../state/AuthContext';
 import { colors } from '../theme';
@@ -28,11 +29,17 @@ function indianPhone(value: string) {
   return digits.length === 10 ? `+91${digits}` : null;
 }
 
+// Messages never confirm whether an email or phone number is registered.
 function authMessage(message: string) {
   const normalized = message.toLowerCase();
   if (normalized.includes('invalid login credentials')) return 'The email/mobile number or password is incorrect.';
-  if (normalized.includes('already') || normalized.includes('exists')) return 'An account already exists with this email or mobile number. Please sign in.';
-  return message;
+  if (normalized.includes('already') || normalized.includes('exists') || normalized.includes('duplicate')) return 'We could not create an account with these details. If you already have an account, sign in or reset your password.';
+  if (normalized.includes('rate limit') || normalized.includes('too many')) return 'Too many attempts. Please wait a few minutes and try again.';
+  if (normalized.includes('password')) return 'Choose a stronger password: at least 10 characters with upper case, lower case and a number.';
+  if (normalized.includes('not confirmed')) return 'Please confirm your email address using the link we sent, then sign in.';
+  if (normalized.includes('captcha')) return 'Please complete the security check and try again.';
+  if (normalized.includes('fetch') || normalized.includes('network')) return 'You appear to be offline. Check your connection and try again.';
+  return 'Something went wrong. Please try again.';
 }
 
 export default function LoginScreen() {
@@ -119,21 +126,19 @@ export default function LoginScreen() {
 
     const { data, error } = await supabase.auth.signUp({
       ...authCredentials,
-      options: { data: { display_name: name.trim(), account_kind: loginRole, accepted_notice_version: '2026-11-19' } },
+      options: { data: { display_name: name.trim(), account_kind: loginRole, accepted_notice_version: NOTICE_VERSION } },
     });
     if (error) {
       setBusy(false);
       return setMessage(authMessage(error.message));
     }
-    if (data.user?.identities?.length === 0) {
-      await supabase.auth.signOut();
-      setBusy(false);
-      return setMessage('An account already exists with this email or mobile number. Please sign in.');
-    }
-    if (!data.session) {
+    // Supabase returns a user with no identities when the address is already registered. Show the same
+    // neutral message as a fresh sign-up so the screen never reveals which addresses have accounts.
+    if (data.user?.identities?.length === 0 || !data.session) {
+      if (data.session) await supabase.auth.signOut();
       setBusy(false);
       return setMessage(identityKind === 'email'
-        ? 'Your account was created. Confirm your email using the link sent to you, then sign in.'
+        ? 'Check your inbox. If this email can be used, we sent a confirmation link. Confirm it, then sign in.'
         : 'Your account was created but mobile confirmation is enabled in the server settings. Contact support to activate it without SMS.');
     }
     await continueToPortal();

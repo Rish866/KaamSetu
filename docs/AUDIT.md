@@ -23,17 +23,20 @@ finished, what is tested, and what is blocked. Nothing is marked done without a 
 
 | WP | Scope | State |
 |----|-------|-------|
-| 1 | Security foundation: grants, RLS, workflow RPCs, audit, consent, matching engine v1, adversarial DB tests, CI | **Done and tested locally** (PR `feature/security-foundation`). Not yet applied to production. |
-| 2 | Candidate product: profile (education, experience, certifications, languages, photo), resume parse review, job feed/search/filters, saved jobs, notification centre, privacy requests, account settings | Not started |
-| 3 | Employer product: company profile and documents, team invitations, job manager UI, applicant pipeline UI, interviews UI, discovery UI | Partial (verification form, job composer) |
-| 4 | Admin console: queues, user lookup, reports, privacy requests, audit search, role management | Not started (RPCs exist) |
-| 5 | Notifications delivery (email provider, preferences, unsubscribe, retries) | In-app records exist, delivery not started |
-| 6 | Privacy: request workflows, retention jobs, legal documents | Not started |
-| 7 | Hardening: rate limiting, CAPTCHA, headers, monitoring, backup drill, runbooks | Not started |
-| 8 | E2E/Playwright, component tests, accessibility, Android/iOS smoke | Not started |
-| 9 | Release automation, store assets, pilot pack | Not started |
+| 1 | Security foundation, workflow RPCs, matching engine v1, adversarial tests | Done, tested (PR #2) |
+| 2 | Candidate product: feed, filters, sorting, saved jobs, detail, apply/withdraw, timeline, interviews, invitations, full profile, resume, consent, settings | Done, tested at DB and route level |
+| 3 | Employer product: onboarding, verification + evidence, company profile, team invites/roles, job manager, pipeline, interviews, offers, contact disclosure, discovery | Done, tested at DB and route level |
+| 4 | Admin console: queues, evidence, users, reports, privacy, audit search, failed emails, roles, matching weights | Done, tested at DB level |
+| 5 | Notifications: in-app centre, read state, preferences, essential vs optional, outbox, retries, unsubscribe, email worker | Built; email delivery **blocked on provider account** |
+| 6 | Privacy: versioned consents, export, deletion, retention jobs, legal drafts | Built; **legal review required** |
+| 7 | Hardening: headers/CSP, password policy, rate limits, sessions, enumeration-safe messages, runbooks | Built; config push and staging checks pending |
+| 8 | Tests: unit, DB/RLS, journey, browser e2e, axe, responsive | Done (see SECURITY.md) |
+| 9 | Release automation, store pack, pilot pack | Done; store submission **blocked on accounts** |
 
-## 3. Evidence for WP1
+Finding #9 (mock data) and #10 (email confirmation) from the table above are resolved in code (`src/data/mock.ts` and
+`DemoContext` deleted; `enable_confirmations = true` in config.toml, applied on `supabase config push`).
+
+## 3. Evidence
 
 Run `npm run test:db` (PGlite, in-process PostgreSQL 18 with Supabase-style roles, `auth.uid()` and storage emulation;
 every real migration is applied in order). Result on the commit that introduced this file: see PR description.
