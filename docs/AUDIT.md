@@ -8,8 +8,8 @@ Status words: Written → Locally tested → CI tested → Merged → Deployed �
 |---|---|---|
 | Production website | v1.3.0, contains demo data strings | `scripts/verify-production.mjs` run 2026-11-19T21:27:32Z |
 | Production database | migrations up to `202611190001` only | `schema_version()`, `job_feed`, `matching_versions` return "not found" (PGRST202/PGRST205) |
-| PR #2 (`feature/security-foundation`, 1c6c65b) | Open, not merged. Its commit is included unchanged in PR #3 | `git log origin/feature/security-foundation..origin/feature/product-screens` |
-| PR #3 (`feature/product-screens`) | Open, not merged. CI on GitHub (see PR) | — |
+| PR #2 (`feature/security-foundation`, 1c6c65b) | Closed as superseded (never merged). Its commit is included unchanged in PR #3 | `git log origin/feature/security-foundation..origin/feature/product-screens` |
+| PR #3 (`feature/product-screens`) | Open, not merged. CI green on head af9804e | Actions run 44622328465 |
 | PR #4 (ops tooling) | Merged into `main` as a14a65b. Adds no app or database change | — |
 | Production database workflow | Dispatched once; stopped at "Missing repository secrets: SUPABASE_ACCESS_TOKEN SUPABASE_DB_PASSWORD" | Actions run 44619768915 |
 | v1.4.0 release | Not created | — |
