@@ -4,6 +4,7 @@ import { defineConfig } from '@playwright/test';
 // Build first: npm run build:web. The server is `expo serve`, which mirrors production routing.
 export default defineConfig({
   testDir: './e2e',
+  testIgnore: ['live/**'],
   timeout: 60_000,
   retries: process.env.CI ? 1 : 0,
   reporter: [['list']],

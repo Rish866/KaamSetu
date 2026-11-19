@@ -714,6 +714,22 @@ end $$;
 --     SQL anonymises; the trusted worker then scrubs the auth identity (frees email/phone, bans sign-in)
 --     and purges storage by folder prefix, and reports back here.
 ------------------------------------------------------------------------------
+-- A suspended company may lose its last owner (needed to delete abusive or test employer accounts).
+-- Any other company must always keep at least one active owner.
+create or replace function private.guard_last_owner()
+returns trigger language plpgsql security definer set search_path = '' as $$
+begin
+  if old.role = 'owner' and old.active
+     and (tg_op = 'DELETE' or new.role <> 'owner' or not new.active)
+     and not exists (
+       select 1 from public.company_members cm
+       where cm.company_id = old.company_id and cm.role = 'owner' and cm.active and cm.user_id <> old.user_id)
+     and exists (select 1 from public.companies c where c.id = old.company_id and c.verification_status <> 'suspended') then
+    raise exception 'A company must keep at least one active owner' using errcode = '23514';
+  end if;
+  return case when tg_op = 'DELETE' then old else new end;
+end $$;
+
 create or replace function public.admin_process_deletion(p_request uuid, p_reason text)
 returns jsonb language plpgsql security definer set search_path = '' as $$
 declare uid uuid := private.require_admin(array['admin','privacy']); v_reason text := private.require_reason(p_reason);
@@ -724,9 +740,10 @@ begin
   if exists (select 1 from private.app_roles where user_id = pr.user_id) then
     raise exception 'Remove administrator roles before deleting this account' using errcode = '55000';
   end if;
-  if exists (select 1 from public.company_members m where m.user_id = pr.user_id and m.active and m.role = 'owner'
+  if exists (select 1 from public.company_members m join public.companies c on c.id = m.company_id
+             where m.user_id = pr.user_id and m.active and m.role = 'owner' and c.verification_status <> 'suspended'
              and not exists (select 1 from public.company_members o where o.company_id = m.company_id and o.active and o.role = 'owner' and o.user_id <> pr.user_id)) then
-    raise exception 'The user is the only owner of a company. Transfer ownership first.' using errcode = '55000';
+    raise exception 'The user is the only owner of an active company. Transfer ownership, or suspend the company first.' using errcode = '55000';
   end if;
   select email into v_email from public.profiles where id = pr.user_id;
   update public.resumes set deleted_at = coalesce(deleted_at, now()), active = false where candidate_id = pr.user_id;

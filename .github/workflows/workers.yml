@@ -1,0 +1,35 @@
+name: Background workers
+
+# Triggers the trusted Supabase Edge Function workers on a schedule. Each worker authenticates the call with WORKER_SECRET
+# (set the same value in GitHub secrets and in `supabase secrets set WORKER_SECRET=...`). Skips cleanly until configured.
+on:
+  schedule:
+    - cron: '*/10 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: workers
+  cancel-in-progress: false
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Call workers
+        env:
+          WORKER_SECRET: ${{ secrets.WORKER_SECRET }}
+          BASE: https://zrexqtzhdkkupyxmfqxd.supabase.co/functions/v1
+        run: |
+          if [ -z "$WORKER_SECRET" ]; then echo "::notice::WORKER_SECRET is not set; workers are not scheduled yet."; exit 0; fi
+          fail=0
+          for fn in email-worker resume-processor privacy-worker; do
+            code=$(curl -s -o out.json -w "%{http_code}" -X POST -H "x-worker-secret: $WORKER_SECRET" "$BASE/$fn" || echo 000)
+            echo "$fn -> HTTP $code $(head -c 300 out.json)"
+            # 503 from email-worker means no email provider is configured: messages stay queued and visible to admins.
+            if [ "$code" != "200" ] && ! { [ "$fn" = "email-worker" ] && [ "$code" = "503" ]; }; then fail=1; fi
+          done
+          exit $fail

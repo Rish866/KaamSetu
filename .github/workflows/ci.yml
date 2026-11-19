@@ -40,6 +40,18 @@ jobs:
       - name: Dependency audit (high and critical)
         run: npm audit --audit-level=high --omit=dev
 
+  edge-functions:
+    name: Edge Functions type check (Deno)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - name: deno check
+        working-directory: supabase/functions
+        run: deno check email-worker/index.ts unsubscribe/index.ts resume-processor/index.ts privacy-worker/index.ts
+
   web:
     name: Web production build, browser, accessibility and responsive tests
     runs-on: ubuntu-latest

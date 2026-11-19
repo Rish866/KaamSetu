@@ -130,6 +130,9 @@ test('data export contains only the caller\'s data; deletion anonymises and free
   // sole company owner cannot be deleted
   const sole = await makeCompany(api, admin, 'Sole Co'); const r2 = (await rpc(sole.owner, 'select public.request_account_deletion() id'))[0].id;
   assert.match(await failure(api.as(admin, (s) => s('select public.admin_process_deletion($1,$2)', [r2, 'owner leaving']))) ?? '', /only owner/);
+  await api.as(admin, (s) => s(`select public.admin_review_company($1,'suspend','Owner requested closure')`, [sole.companyId]));
+  await api.as(admin, (s) => s('select public.admin_process_deletion($1,$2)', [r2, 'Owner requested closure; company suspended']));
+  assert.equal((await api.q('select active from public.company_members where user_id=$1', [sole.owner.id])).rows[0].active, false, 'sole owner of a suspended company can be deleted');
 });
 
 test('abuse reports flow to moderators; reporters see only their own', async () => {
