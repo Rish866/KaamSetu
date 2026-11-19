@@ -10,7 +10,7 @@ import { colors } from '../theme';
 export default function HomeScreen() {
   const { width } = useWindowDimensions(); const desktop = width >= 820;
   return <SafeAreaView style={styles.safe}><ScrollView contentContainerStyle={styles.page}>
-    <View style={styles.header}><Logo />{desktop && <View style={styles.headerLinks}><Link href="/candidate" style={styles.headerLink}>For candidates</Link><Link href="/employer" style={styles.headerLink}>For employers</Link><Link href="/admin" style={styles.headerLink}>Admin demo</Link></View>}<LinkButton label="Sign in" href="/login" variant="secondary" /></View>
+    <View style={styles.header}><Logo />{desktop && <View style={styles.headerLinks}><Link href={{ pathname: '/login', params: { role: 'candidate' } }} style={styles.headerLink}>For candidates</Link><Link href={{ pathname: '/login', params: { role: 'employer' } }} style={styles.headerLink}>For employers</Link><Link href={{ pathname: '/login', params: { role: 'admin' } }} style={styles.headerLink}>Admin sign in</Link></View>}<LinkButton label="Sign in" href="/login" variant="secondary" /></View>
     <LinearGradient colors={['#171B3D', '#25275A', '#184B64']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={[styles.hero, !desktop && styles.heroMobile]}>
       <View style={styles.heroGlowOne} /><View style={styles.heroGlowTwo} />
       <View style={styles.heroCopy}><Pill tone="saffron">Built for Mumbai, Thane & Pune</Pill><Text style={[styles.heroTitle, !desktop && styles.heroTitleMobile]}>Stop chasing jobs. Let the right work find you.</Text><Text style={styles.heroText}>KaamSetu connects skilled people with verified employers using transparent salaries, consent-first profiles, and explainable AI matching.</Text>
@@ -24,17 +24,17 @@ export default function HomeScreen() {
     </LinearGradient>
     <View style={styles.section}><SectionTitle eyebrow="One marketplace, two directions" title="Candidates and companies meet in the middle" description="Candidates apply to suitable jobs. Verified employers invite interested candidates without seeing private details first." />
       <View style={[styles.featureGrid, !desktop && styles.stack]}>
-        <Feature icon="person" title="For candidates" text="Upload once, confirm your details, see salary-compatible jobs, and track every response." href="/candidate" label="Explore candidate demo" />
-        <Feature icon="business" title="For employers" text="Publish salary-visible roles, review matched applicants, and invite consenting candidates." href="/employer" label="Explore employer demo" tone="saffron" />
+        <Feature icon="person" title="For candidates" text="Upload once, confirm your details, see salary-compatible jobs, and track every response." href={{ pathname: '/login', params: { role: 'candidate' } }} label="Create candidate account" />
+        <Feature icon="business" title="For employers" text="Publish salary-visible roles, review matched applicants, and invite consenting candidates." href={{ pathname: '/login', params: { role: 'employer' } }} label="Create employer account" tone="saffron" />
         <Feature icon="sparkles" title="AI with guardrails" text="Every score has reasons. AI helps people decide; it never secretly applies or rejects." label="Explainable by design" tone="coral" />
       </View>
     </View>
-    <LinearGradient colors={['#171B3D', '#26285C']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.cta}><View style={styles.ctaOrb} /><View style={styles.ctaCopy}><Text style={styles.ctaTitle}>A better first step for every job search.</Text><Text style={styles.ctaText}>Try the interactive product with sample data. No account needed.</Text></View><LinkButton label="Start candidate demo" href="/candidate" /></LinearGradient>
+    <LinearGradient colors={['#171B3D', '#26285C']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.cta}><View style={styles.ctaOrb} /><View style={styles.ctaCopy}><Text style={styles.ctaTitle}>A better first step for every job search.</Text><Text style={styles.ctaText}>Create your secure candidate account to view jobs and manage applications.</Text></View><LinkButton label="Create candidate account" href={{ pathname: '/login', params: { role: 'candidate' } }} /></LinearGradient>
     <Text style={styles.footer}>KaamSetu · Private prototype · Mumbai Metropolitan Region & Pune</Text>
   </ScrollView></SafeAreaView>;
 }
 
-function Feature({ icon, title, text, href, label, tone = 'teal' }: { icon: keyof typeof Ionicons.glyphMap; title: string; text: string; href?: '/candidate' | '/employer'; label: string; tone?: 'teal' | 'saffron' | 'coral' }) {
+function Feature({ icon, title, text, href, label, tone = 'teal' }: { icon: keyof typeof Ionicons.glyphMap; title: string; text: string; href?: React.ComponentProps<typeof Link>['href']; label: string; tone?: 'teal' | 'saffron' | 'coral' }) {
   const bg = tone === 'saffron' ? colors.saffronPale : tone === 'coral' ? '#FCE2DA' : colors.tealPale;
   const fg = tone === 'saffron' ? '#8A5B00' : tone === 'coral' ? colors.coral : colors.teal;
   const content = <><View style={[styles.featureIcon, { backgroundColor: bg }]}><Ionicons name={icon} size={23} color={fg} /></View><Text style={styles.featureTitle}>{title}</Text><Text style={styles.featureText}>{text}</Text><View style={styles.inlineLink}><Text style={styles.inlineLinkText}>{label}</Text><Ionicons name={href ? 'arrow-forward' : 'shield-checkmark'} size={16} color={colors.teal} /></View></>;
