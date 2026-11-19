@@ -1,0 +1,19 @@
+project_id = "kaamsetu"
+
+[auth]
+site_url = "https://www.getkaamsetu.in"
+additional_redirect_urls = [
+  "https://www.getkaamsetu.in/reset-password",
+  "https://getkaamsetu.in/reset-password"
+]
+enable_signup = true
+enable_anonymous_sign_ins = false
+enable_manual_linking = false
+
+[auth.email]
+enabled = true
+enable_confirmations = false
+
+[auth.sms]
+enabled = true
+enable_confirmations = false
