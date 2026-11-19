@@ -1,6 +1,6 @@
 import { useLocalSearchParams } from 'expo-router';
 import React, { useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { Linking, StyleSheet, Text, View } from 'react-native';
 import { AppShell } from '../../../components/AppShell';
 import { Banner, Chips, ConfirmDialog, Field, Row, StateView, unwrap, useLoad } from '../../../components/kit';
 import { Card, Pill, PrimaryButton } from '../../../components/ui';
@@ -27,7 +27,7 @@ export default function JobApplicants() {
   const [msg, setMsg] = useState<{ tone: 'error' | 'success'; text: string } | null>(null);
   const [dlg, setDlg] = useState<{ kind: 'reject' | 'offer' | 'interview'; a: Applicant } | null>(null);
   const [when, setWhen] = useState(''); const [mode, setMode] = useState('video'); const [details, setDetails] = useState('');
-  const [contact, setContact] = useState<Record<string, { email: string | null; phone: string | null }>>({});
+  const [contact, setContact] = useState<Record<string, { email: string | null; email_verified: boolean; phone: string | null; phone_verified: boolean }>>({});
 
   const bad = (e: { message?: string; code?: string }) => setMsg({ tone: 'error', text: friendlyError(e) });
   async function refresh() { await Promise.all([apps.reload(), ivs.reload()]); }
@@ -37,7 +37,13 @@ export default function JobApplicants() {
   }
   async function reveal(a: Applicant) {
     const { data, error } = await supabase.rpc('get_applicant_contact', { p_application: a.application_id }); if (error) return bad(error);
-    const row = (data as { email: string | null; phone: string | null }[])[0]; setContact({ ...contact, [a.application_id]: row });
+    const row = (data as { email: string | null; email_verified: boolean; phone: string | null; phone_verified: boolean }[])[0]; setContact({ ...contact, [a.application_id]: row });
+  }
+  // The resume is shared with the employer when the candidate applies; access is logged and the link expires in 60 seconds.
+  async function openResume(a: Applicant) {
+    const { data: path, error } = await supabase.rpc('get_applicant_resume', { p_application: a.application_id }); if (error) return bad(error);
+    const { data, error: e2 } = await supabase.storage.from('resumes').createSignedUrl(path as string, 60); if (e2 || !data) return bad(e2 ?? { message: 'Could not open the resume.' });
+    await Linking.openURL(data.signedUrl);
   }
   const all = apps.data ?? []; const shown = all.filter((a) => (!filter || a.stage === filter) && (!q || `${a.display_name} ${a.headline ?? ''}`.toLowerCase().includes(q.toLowerCase())));
   const count = (s: string) => all.filter((a) => a.stage === s).length;
@@ -46,7 +52,7 @@ export default function JobApplicants() {
     {msg && <Banner tone={msg.tone}>{msg.text}</Banner>}
     <Card style={{ gap: 12 }}><Field label="Search applicants" value={q} onChangeText={setQ} placeholder="Name or headline" />
       <Chips label="Pipeline stage" options={[{ id: 'all', label: `All (${all.length})` }, ...stages.map((s) => ({ id: s, label: `${stageLabels[s]} (${count(s)})` }))]} selected={[filter ?? 'all']} onToggle={(s) => setFilter(s === 'all' ? null : s)} />
-      <Text style={styles.muted}>Candidate email, phone and resume stay hidden until you shortlist a candidate who has agreed to share contact details. Exporting applicant lists is disabled to protect candidate privacy.</Text></Card>
+      <Text style={styles.muted}>Applying shares the security-checked resume of the candidate with you. Email and phone stay hidden until you shortlist a candidate who has agreed to share them. Exporting applicant lists is disabled to protect candidate privacy.</Text></Card>
     <StateView loading={apps.loading || membership.loading} error={apps.error} onRetry={apps.reload} empty={shown.length === 0} emptyTitle="No applicants here" emptyText="Applicants appear as soon as candidates apply.">
       <View style={{ gap: 12 }}>{shown.map((a) => {
         const iv = (ivs.data ?? []).find((i) => i.application_id === a.application_id && i.status !== 'cancelled'); const c = contact[a.application_id];
@@ -55,10 +61,11 @@ export default function JobApplicants() {
           {a.note && <Text style={styles.note}>“{a.note}”</Text>}
           {iv && <Banner tone={iv.status === 'confirmed' ? 'success' : iv.status === 'reschedule_requested' ? 'warn' : 'info'}>Interview {new Date(iv.proposed_at).toLocaleString('en-IN')} · {labelize(iv.mode)} · {labelize(iv.status)}{iv.response_note ? ` · Candidate: ${iv.response_note}` : ''}</Banner>}
           {open === a.application_id && a.match?.components && <View style={{ gap: 4 }}>{Object.entries(a.match.components).map(([k, comp]) => <Text key={k} style={styles.muted}>{labelize(k)} ({comp.weight}%): {comp.explanation}</Text>)}</View>}
-          {c && <Banner tone="success">Email: {c.email ?? '–'} · Phone: {c.phone ?? '–'} (this disclosure is logged)</Banner>}
+          {c && <Banner tone="success">Email: {c.email ?? '–'}{c.email && !c.email_verified ? ' (not verified)' : ''} · Phone: {c.phone ?? '–'}{c.phone && !c.phone_verified ? ' (not verified by SMS)' : ''}. This disclosure is logged and visible to the candidate.</Banner>}
           <Row><PrimaryButton label={open === a.application_id ? 'Hide match details' : 'Why this score'} variant="ghost" onPress={() => setOpen(open === a.application_id ? null : a.application_id)} />
             {canAct && (next[a.stage] ?? []).map((to) => to === 'rejected' ? <PrimaryButton key={to} label="Reject" variant="secondary" onPress={() => setDlg({ kind: 'reject', a })} /> : to === 'interview' ? <PrimaryButton key={to} label={iv ? 'Reschedule interview' : 'Propose interview'} icon="calendar-outline" onPress={() => { setWhen(''); setDetails(''); setDlg({ kind: 'interview', a }); }} /> : to === 'offer' ? <PrimaryButton key={to} label="Make offer" icon="ribbon-outline" onPress={() => { setDetails(''); setDlg({ kind: 'offer', a }); }} /> : <PrimaryButton key={to} label={to === 'viewed' ? 'Mark viewed' : to === 'shortlisted' ? 'Shortlist' : 'Mark hired'} variant={to === 'shortlisted' || to === 'hired' ? 'primary' : 'secondary'} onPress={() => move(a, to)} />)}
             {canAct && a.stage === 'interview' && iv && <PrimaryButton label="Cancel interview" variant="ghost" onPress={async () => { const { error } = await supabase.rpc('cancel_interview', { p_interview: iv.interview_id }); if (error) return bad(error); await refresh(); }} />}
+            {canAct && a.stage !== 'withdrawn' && <PrimaryButton label="Open resume" variant="secondary" icon="document-text-outline" onPress={() => openResume(a)} />}
             {canAct && ['shortlisted', 'interview', 'offer', 'hired'].includes(a.stage) && !c && <PrimaryButton label="View contact details" variant="secondary" icon="call-outline" onPress={() => reveal(a)} />}</Row>
         </Card>;
       })}</View>

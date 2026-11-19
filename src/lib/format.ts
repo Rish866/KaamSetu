@@ -69,7 +69,7 @@ export function friendlyError(error: { message?: string; code?: string } | null 
   if (error.code === '23505' && /duplicate key/i.test(message)) return 'That already exists.';
   if (/JWT|session/i.test(message)) return 'Your session has expired. Please sign in again.';
   // Messages raised by our own database functions are written for users.
-  if (error.code && /^(P0002|55000|22023|23505|23514|42501|28000|P0001)$/.test(error.code)) return message;
+  if (error.code && /^(P0002|55000|22023|23505|23514|42501|28000|P0001|54000)$/.test(error.code)) return message;
   return 'Something went wrong. Please try again.';
 }
 

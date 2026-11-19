@@ -161,8 +161,8 @@ test('cross-company isolation: jobs, applicants, interviews, members, notificati
   assert.match(await failure(api.as(e2.owner, (s) => s(`select public.set_member_role($1,$2,'viewer')`, [e1.companyId, e1.owner.id]))) ?? '', /owners/);
   assert.match(await failure(api.as(e2.owner, (s) => s(`select public.submit_company_verification($1,'domain','evil.example')`, [e1.companyId]))) ?? '', /owner/);
   assert.equal((await api.as(e2.owner, (s) => s('select * from public.notifications'))).rows.every((n) => n.recipient_id === e2.owner.id), true);
-  const upd = await api.as(e2.owner, async (s) => (await s(`update public.companies set display_name='Hijack' where id=$1`, [e1.companyId])).affectedRows);
-  assert.equal(upd, 0);
+  assert.match(await failure(api.as(e2.owner, (s) => s(`update public.companies set display_name='Hijack' where id=$1`, [e1.companyId]))) ?? '', /permission denied/);
+  assert.match(await failure(api.as(e2.owner, (s) => s(`select public.update_company_profile($1, '{"description":"hijack"}')`, [e1.companyId]))) ?? '', /Only owners/);
 });
 
 test('viewers can read but not act; last owner cannot be removed', async () => {
@@ -193,7 +193,7 @@ test('audit log and consent history are immutable even for the table owner', asy
 test('resume storage is private to the owner and paths are validated', async () => {
   await api.q(`insert into storage.objects (bucket_id, name, owner_id, metadata) values ('resumes', $1, $2, '{"size":"500"}')`, [`${B.id}/b.pdf`, B.id]);
   const seenByB = await api.as(B, async (s) => (await s(`select name from storage.objects where bucket_id='resumes'`)).rows.map((r) => r.name));
-  assert.deepEqual(seenByB, [`${B.id}/b.pdf`]);
+  assert.deepEqual(seenByB, [], 'unregistered or unscanned files are not readable, even by their owner');
   const anonErr = await failure(api.as(null, (s) => s('select * from storage.objects')));
   assert.ok(anonErr === null ? (await api.as(null, (s) => s('select * from storage.objects'))).rows.length === 0 : /permission denied/.test(anonErr), 'anon must see no objects');
   assert.equal((await api.as(e1.owner, (s) => s(`select * from storage.objects where bucket_id='resumes'`))).rows.length, 0, 'employers must not list resumes');
@@ -220,7 +220,7 @@ test('company evidence bucket is private to owner and moderators', async () => {
   assert.ok(await failure(api.as(e2.owner, (s) => s(`insert into storage.objects (bucket_id,name,owner_id) values ('company-evidence',$1,$2)`, [`${e1.companyId}/fake.pdf`, e2.owner.id]))));
 });
 
-test('SQL-injection payloads are treated as data', async () => {
+test('SQL metacharacters in user input are stored and searched literally', async () => {
   const payload = `'; drop table public.jobs; --`;
   await api.as(A, (s) => s(`update public.candidate_profiles set headline=$2 where user_id=$1`, [A.id, payload]));
   const r = await api.as(A, async (s) => (await s('select headline from public.candidate_profiles where user_id=$1', [A.id])).rows[0]);
@@ -242,9 +242,9 @@ test('no public function is executable by anon; internals are not executable by 
   const { rows } = await api.q(`select p.oid::regprocedure::text sig from pg_proc p join pg_namespace n on n.oid=p.pronamespace
     where n.nspname='public' and p.prokind='f' and has_function_privilege('anon', p.oid, 'execute')
       and not exists (select 1 from pg_depend d where d.objid=p.oid and d.deptype='e')`);
-  assert.deepEqual(rows, []);
+  assert.deepEqual(rows.map((r) => r.sig), ['schema_version()'], 'only the schema-version probe is public');
   const internal = await api.q(`select p.oid::regprocedure::text sig from pg_proc p join pg_namespace n on n.oid=p.pronamespace
     where n.nspname='private' and has_function_privilege('authenticated', p.oid, 'execute')`);
-  const allowed = ['is_company_member', 'is_admin', 'company_is_approved', 'job_is_public', 'job_is_editable'];
+  const allowed = ['is_company_member', 'is_admin', 'company_is_approved', 'job_is_public', 'job_is_editable', 'user_is_active', 'owner_can_read_resume', 'employer_can_read_resume'];
   assert.deepEqual(internal.rows.filter((r) => !allowed.some((a) => r.sig.startsWith(`private.${a}(`))), []);
 });

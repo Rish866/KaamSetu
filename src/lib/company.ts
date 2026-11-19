@@ -10,9 +10,10 @@ export type Membership = { role: 'owner' | 'recruiter' | 'viewer'; company: Comp
 /** The signed-in employer's active company membership, straight from the database. */
 export function useMembership(userId: string) {
   return useLoad(async (): Promise<Membership | null> => {
-    const row = unwrap(await supabase.from('company_members').select('role, companies(*)').eq('user_id', userId).eq('active', true).maybeSingle());
+    // Full company record (including private verification fields) is only available to members, via RPC.
+    const row = unwrap(await supabase.rpc('my_membership')) as unknown as { role: Membership['role']; company: Company } | null;
     if (!row) return null;
-    return { role: row.role as Membership['role'], company: row.companies as unknown as Company };
+    return { role: row.role, company: row.company };
   }, [userId]);
 }
 export const canAct = (m: Membership | null) => Boolean(m && m.role !== 'viewer' && m.company.verification_status === 'approved');

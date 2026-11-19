@@ -107,7 +107,7 @@ test('data export contains only the caller\'s data; deletion anonymises and free
   await api.q(`insert into storage.objects (bucket_id,name,owner_id,metadata) values ('resumes',$1,$2,'{"size":"700"}')`, [`${c.id}/d.pdf`, c.id]);
   await api.as(c, (s) => s(`select public.register_resume($1,'d.pdf','application/pdf',700,$2)`, [`${c.id}/d.pdf`, '1'.repeat(64)]));
   const res = (await api.as(admin, (s) => s('select public.admin_process_deletion($1,$2) r', [rid, 'Verified identity by email'])) ).rows[0].r;
-  assert.deepEqual(res.storage_paths_to_purge, [`${c.id}/d.pdf`]);
+  assert.deepEqual(res, { auth_scrub: 'pending', storage_purge: 'pending' });
   assert.equal((await api.as(admin, (s) => s(`select * from storage.objects where bucket_id='resumes'`))).rows.length, 0, 'admins cannot read resume files, so purging is a service-role job');
   const p = (await api.q('select display_name,email,phone,status from public.profiles where id=$1', [c.id])).rows[0];
   assert.deepEqual(p, { display_name: 'Deleted user', email: null, phone: null, status: 'deleted' });
@@ -116,8 +116,16 @@ test('data export contains only the caller\'s data; deletion anonymises and free
   assert.equal((await api.q('select discovery_enabled d from public.candidate_profiles where user_id=$1', [c.id])).rows[0].d, false);
   assert.match(await failure(api.as(c, (s) => s('select public.apply_to_job($1)', [jobA]))) ?? '', /not active/, 'deleted accounts cannot act');
   assert.ok((await api.q('select count(*)::int n from public.consent_records where user_id=$1', [c.id])).rows[0].n >= 2, 'consent evidence is retained');
-  const reuse = await failure(api.signUp('candidate', 'Reuser', { email: c.email, phone: c.phone }));
-  assert.equal(reuse, null, 'email and phone can be registered again');
+  // Real GoTrue keeps the email/phone in auth.users, so re-registration must fail until the trusted worker scrubs it.
+  assert.match(await failure(api.signUp('candidate', 'Reuser', { email: c.email, phone: c.phone })) ?? '', /duplicate key/, 'identifiers are still held before the scrub');
+  const pending = (await api.asService((s) => s('select * from public.privacy_deletions_pending()'))).rows;
+  assert.ok(pending.some((p) => p.user_id === c.id));
+  // Simulates what scripts/process-deletions.mjs does through the Auth Admin API (unverified against real GoTrue).
+  await api.q(`update auth.users set email = 'deleted+' || id || '@deleted.invalid', phone = null, banned_until = 'infinity', raw_user_meta_data = '{}' where id = $1`, [c.id]);
+  await api.asService((s) => s(`select public.privacy_mark_processed($1,'auth_scrub'), public.privacy_mark_processed($1,'storage_purge')`, [rid]));
+  assert.equal((await api.q('select email from public.profiles where id=$1', [c.id])).rows[0].email, null, 'tombstone email is not synced into the profile');
+  assert.equal(await failure(api.signUp('candidate', 'Reuser', { email: c.email, phone: c.phone })), null, 'after the scrub the email and phone can be registered again');
+  assert.equal((await api.asService((s) => s('select * from public.privacy_deletions_pending()'))).rows.some((p) => p.user_id === c.id), false);
   assert.match(await failure(api.as(admin, (s) => s('select public.admin_process_deletion($1,$2)', [rid, 'again again']))) ?? '', /not found/i);
   // sole company owner cannot be deleted
   const sole = await makeCompany(api, admin, 'Sole Co'); const r2 = (await rpc(sole.owner, 'select public.request_account_deletion() id'))[0].id;
@@ -178,21 +186,26 @@ test('notifications: outbox, preferences, essential vs optional, retries, securi
   const a = (await rpc(c, 'select public.apply_to_job($1) id', [jobB]))[0].id;
   await api.as(co.owner, (s) => s(`select public.transition_application($1,'viewed')`, [a]));   // optional kind
   await api.as(co.owner, (s) => s(`select public.transition_application($1,'shortlisted')`, [a])); // essential kind
-  const rows = (await api.q('select kind,status,subject from private.email_outbox where recipient_id=$1 order by created_at,id', [c.id])).rows;
-  assert.equal(rows.find((r) => r.kind === 'application.viewed').status, 'suppressed', 'optional mail respects preference');
-  assert.equal(rows.find((r) => r.kind === 'application.shortlisted').status, 'pending', 'essential mail is always sent');
+  const claimed = (await api.asService((s) => s('select * from public.outbox_claim(100)'))).rows;
+  const rows = (await api.q('select kind,status,subject,category from private.email_outbox where recipient_id=$1 order by created_at,id', [c.id])).rows;
+  assert.equal(rows.find((r) => r.kind === 'application.viewed').status, 'suppressed', 'optional mail respects the preference at send time');
+  assert.equal(rows.find((r) => r.kind === 'application.shortlisted').category, 'essential');
+  assert.equal(rows.find((r) => r.kind === 'application.shortlisted').status, 'sending', 'essential mail is claimed regardless of preference');
   assert.ok(rows.every((r) => !/Mail Me|@|\+91/.test(r.subject)), 'no candidate-sensitive data in subjects');
-  const claimed = (await api.q('select * from public.outbox_claim(100)')).rows;
   const mine = claimed.find((r) => r.kind === 'application.shortlisted' && r.recipient_email === c.email);
   assert.equal(mine.recipient_email, c.email);
-  for (let i = 0; i < 5; i++) await api.q(`select public.outbox_report($1,false,'SMTP 421')`, [mine.id]);
+  for (let i = 0; i < 5; i++) {
+    assert.equal((await api.asService((s) => s(`select public.outbox_report($1,false,'SMTP 421') ok`, [mine.id]))).rows[0].ok, true);
+    await api.q(`update private.email_outbox set next_attempt_at = now() where id=$1 and status='pending'`, [mine.id]);
+    if (i < 4) assert.ok((await api.asService((s) => s('select * from public.outbox_claim(100)'))).rows.some((r) => r.id === mine.id), `retry ${i + 1} is re-claimed`);
+  }
   assert.equal((await api.q('select status,attempts from private.email_outbox where id=$1', [mine.id])).rows[0].status, 'failed');
   assert.ok((await api.as(admin, (s) => s('select * from public.admin_email_failures()'))).rows.some((r) => r.id === mine.id));
   assert.match(await failure(api.as(c, (s) => s('select * from public.outbox_claim()'))) ?? '', /permission denied/);
   assert.match(await failure(api.as(c, (s) => s('select * from private.email_outbox'))) ?? '', /permission denied/);
   // unsubscribe + security notifications
   const token = (await api.q('select unsubscribe_token t from public.notification_preferences where user_id=$1', [c.id])).rows[0].t;
-  assert.equal((await api.q('select public.unsubscribe_by_token($1) ok', [token])).rows[0].ok, true);
+  assert.equal((await api.asService((s) => s('select public.unsubscribe_by_token($1) ok', [token]))).rows[0].ok, true);
   assert.match(await failure(api.as(c, (s) => s('select public.unsubscribe_by_token($1)', [token]))) ?? '', /permission denied/);
   await api.q(`update auth.users set encrypted_password='new-hash' where id=$1`, [c.id]);
   assert.ok((await rpc(c, 'select kind from public.notifications')).some((n) => n.kind === 'security.password_changed'));
@@ -226,6 +239,6 @@ test('admin consoles: authorisation by role, queues, user lookup audit, audit se
   // retention (service role only)
   await api.q(`update public.notifications set read_at = now() - interval '400 days' where recipient_id=$1`, [cand.id]);
   assert.match(await failure(api.as(admin, (s) => s('select public.run_retention_jobs()'))) ?? '', /permission denied/);
-  const res = (await api.q('select public.run_retention_jobs() r')).rows[0].r;
+  const res = (await api.asService((s) => s('select public.run_retention_jobs() r'))).rows[0].r;
   assert.ok(res.notifications >= 1);
 });

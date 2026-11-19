@@ -10,7 +10,7 @@ import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../state/AuthContext';
 import { colors } from '../../theme';
 
-type J = { job_id: string; title: string; status: string; work_mode: string; city: string | null; salary_min: number; salary_max: number; salary_period: 'monthly' | 'annual'; applicants: number; new_applicants: number; published_at: string | null; created_at: string };
+type J = { job_id: string; title: string; status: string; moderation_hold: string | null; work_mode: string; city: string | null; salary_min: number; salary_max: number; salary_period: 'monthly' | 'annual'; applicants: number; new_applicants: number; published_at: string | null; created_at: string };
 const tone = (s: string) => (s === 'published' ? 'teal' : s === 'rejected' ? 'coral' : s === 'pending_review' || s === 'paused' ? 'saffron' : 'neutral') as 'teal' | 'coral' | 'saffron' | 'neutral';
 
 export default function EmployerJobs() {
@@ -37,14 +37,15 @@ export default function EmployerJobs() {
     <StateView loading={membership.loading || jobs.loading} error={membership.error ?? jobs.error} onRetry={() => { void membership.reload(); void jobs.reload(); }} empty={(jobs.data ?? []).length === 0} emptyTitle="No jobs yet" emptyText="Post your first job. Salary is required so candidates know what to expect.">
       <View style={{ gap: 12 }}>{(jobs.data ?? []).map((j) => <Card key={j.job_id} style={{ gap: 10 }}>
         <View style={styles.head}><View style={{ flex: 1 }}><Text style={styles.title}>{j.title}</Text><Text style={styles.muted}>{labelize(j.work_mode)}{j.city ? ` · ${j.city}` : ''} · {formatSalaryRange(j.salary_min, j.salary_max, j.salary_period)} · created {timeAgo(j.created_at)}</Text></View><Pill tone={tone(j.status)}>{labelize(j.status)}</Pill></View>
+        {j.moderation_hold && <Banner tone="warn">{j.moderation_hold === 'admin' ? 'KaamSetu moderators have put this job on hold. Contact support to resolve it.' : 'This job was paused because your company is suspended.'}</Banner>}
         <Text style={styles.muted}>{j.applicants} applicant{j.applicants === 1 ? '' : 's'}{j.new_applicants ? ` · ${j.new_applicants} new` : ''}</Text>
         <Row>
           <PrimaryButton label="Applicants" icon="people-outline" variant="secondary" onPress={() => router.push(`/employer/job/${j.job_id}`)} />
           {canEdit && (j.status === 'draft' || j.status === 'rejected') && <><PrimaryButton label="Edit" variant="secondary" icon="create-outline" onPress={() => router.push(`/post-job?id=${j.job_id}`)} /><PrimaryButton label="Submit for review" icon="paper-plane-outline" disabled={!verified} onPress={() => run(() => supabase.rpc('submit_job_for_review', { p_job: j.job_id }), 'Submitted. A reviewer will check it shortly.')} /></>}
           {canEdit && j.status === 'published' && <PrimaryButton label="Pause" variant="secondary" onPress={() => setConfirm({ job: j, to: 'paused' })} />}
-          {canEdit && j.status === 'paused' && <PrimaryButton label="Resume" onPress={() => run(() => supabase.rpc('set_job_status', { p_job: j.job_id, p_to: 'published' }), 'Job is live again.')} />}
+          {canEdit && j.status === 'paused' && !j.moderation_hold && <PrimaryButton label="Resume" onPress={() => run(() => supabase.rpc('set_job_status', { p_job: j.job_id, p_to: 'published' }), 'Job is live again.')} />}
           {canEdit && (j.status === 'published' || j.status === 'paused') && <PrimaryButton label="Close" variant="secondary" icon="close-circle-outline" onPress={() => setConfirm({ job: j, to: 'closed' })} />}
-          {canEdit && j.status === 'closed' && <PrimaryButton label="Reopen" variant="secondary" onPress={() => run(() => supabase.rpc('set_job_status', { p_job: j.job_id, p_to: 'published' }), 'Job reopened.')} />}
+          {canEdit && j.status === 'closed' && !j.moderation_hold && <PrimaryButton label="Reopen" variant="secondary" onPress={() => run(() => supabase.rpc('set_job_status', { p_job: j.job_id, p_to: 'published' }), 'Job reopened.')} />}
           {canEdit && <PrimaryButton label="Duplicate" variant="ghost" icon="copy-outline" onPress={() => run(() => supabase.rpc('duplicate_job', { p_job: j.job_id }), 'A draft copy was created.')} />}
           <PrimaryButton label={history?.id === j.job_id ? 'Hide history' : 'History'} variant="ghost" onPress={() => showHistory(j.job_id)} />
         </Row>

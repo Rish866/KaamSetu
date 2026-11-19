@@ -29,7 +29,7 @@ export default function AdminScreen() {
       {msg && <Banner tone={msg.tone}>{msg.text}</Banner>}
       {tab === 'overview' && dash.data && <Overview d={dash.data} go={setTab} />}
       {tab === 'companies' && <Companies {...props} />}{tab === 'jobs' && <Jobs {...props} />}{tab === 'reports' && <Reports {...props} />}
-      {tab === 'users' && <Users {...props} />}{tab === 'privacy' && <PrivacyQueue {...props} />}{tab === 'audit' && <Audit />}{tab === 'system' && <System />}{tab === 'access' && <Access {...props} />}
+      {tab === 'users' && <Users {...props} />}{tab === 'privacy' && <PrivacyQueue {...props} />}{tab === 'audit' && <Audit />}{tab === 'system' && <System {...props} />}{tab === 'access' && <Access {...props} />}
     </StateView>
     <ConfirmDialog visible={!!act} requireReason destructive={act?.destructive} title={act?.title ?? ''} message={act?.message} confirmLabel={act?.confirm ?? 'Confirm'} onCancel={() => setAct(null)}
       onConfirm={async (reason) => { const a = act!; const { error } = await a.run(reason); if (error) throw error; setAct(null); setMsg({ tone: 'success', text: 'Done. The action was recorded in the audit log.' }); setTick((t) => t + 1); void dash.reload(); }} />
@@ -38,7 +38,7 @@ export default function AdminScreen() {
 type P = { ask: (a: Act) => void; tick: number; setMsg: (m: { tone: 'error' | 'success'; text: string }) => void };
 
 function Overview({ d, go }: { d: Dash; go: (t: string) => void }) {
-  const q: [string, number, string, string][] = [['Companies to verify', d.companies_pending, 'companies', 'business-outline'], ['Jobs to review', d.jobs_pending, 'jobs', 'document-text-outline'], ['Open reports', d.reports_open, 'reports', 'flag-outline'], ['Privacy requests', d.privacy_open, 'privacy', 'finger-print-outline'], ['Failed emails', d.email_failures, 'system', 'mail-outline']];
+  const q: [string, number, string, string][] = [['Companies to verify', d.companies_pending, 'companies', 'business-outline'], ['Jobs to review', d.jobs_pending, 'jobs', 'document-text-outline'], ['Open reports', d.reports_open, 'reports', 'flag-outline'], ['Privacy requests', d.privacy_open, 'privacy', 'finger-print-outline'], ['Deletion clean-up pending', d.privacy_cleanup_pending, 'privacy', 'trash-outline'], ['Emails waiting to send', d.email_pending, 'system', 'mail-unread-outline'], ['Failed emails', d.email_failures, 'system', 'mail-outline'], ['Resumes in quarantine', d.resumes_quarantined, 'system', 'shield-outline']];
   return <><View style={styles.metrics}>{q.map(([label, v, t, icon]) => <View key={label} style={{ flexGrow: 1, minWidth: 150 }}><Metric label={label} value={`${v}`} icon={icon as never} /><PrimaryButton label="Open" variant="ghost" onPress={() => go(t)} /></View>)}</View>
     <SectionHead title="Platform" /><View style={styles.metrics}><Metric label="Active candidates" value={`${d.candidates}`} icon="person-outline" /><Metric label="Active employers" value={`${d.employers}`} icon="business-outline" /><Metric label="Published jobs" value={`${d.published_jobs}`} icon="briefcase-outline" /><Metric label="Applications" value={`${d.applications}`} icon="paper-plane-outline" /><Metric label="Audit events (24h)" value={`${d.audit_events_24h}`} icon="list-outline" /></View></>;
 }
@@ -61,12 +61,13 @@ function Jobs({ ask, tick }: P) {
   const [status, setStatus] = useState('pending_review');
   const q = useLoad(async () => (unwrap(await supabase.rpc('admin_job_queue', { p_status: status })) ?? []) as any[], [status, tick]);
   const decide = (j: any, decision: string, title: string, confirm: string, destructive = false) => ask({ title: `${title}: ${j.title}`, confirm, destructive, run: (reason) => supabase.rpc('admin_review_job', { p_job: j.job_id, p_decision: decision, p_reason: reason }) });
-  return <><Chips label="Status" options={['pending_review', 'published', 'paused', 'rejected'].map((s) => ({ id: s, label: labelize(s) }))} selected={[status]} onToggle={setStatus} />
+  return <><Chips label="Status" options={['pending_review', 'published', 'paused', 'closed', 'rejected'].map((s) => ({ id: s, label: labelize(s) }))} selected={[status]} onToggle={setStatus} />
     <StateView loading={q.loading} error={q.error} onRetry={q.reload} empty={(q.data ?? []).length === 0} emptyTitle="No jobs in this state">{(q.data ?? []).map((j) => <Card key={j.job_id} style={{ gap: 8 }}>
-      <Text style={styles.title}>{j.title}</Text><Text style={styles.muted}>{j.company_name} ({labelize(j.company_status)}) · {labelize(j.work_mode)}{j.city ? ` · ${j.city}` : ''} · {formatSalaryRange(j.salary_min, j.salary_max, j.salary_period)}</Text>
+      <Text style={styles.title}>{j.title}{j.moderation_hold ? ' · on hold' : ''}</Text><Text style={styles.muted}>{j.company_name} ({labelize(j.company_status)}) · {labelize(j.work_mode)}{j.city ? ` · ${j.city}` : ''} · {formatSalaryRange(j.salary_min, j.salary_max, j.salary_period)}</Text>
       <Text style={styles.body}>{j.description}</Text><Row>{(j.skills ?? []).map((s: string) => <Pill key={s} tone="neutral">{s}</Pill>)}</Row>
       <Row>{status === 'pending_review' && <><PrimaryButton label="Approve and publish" icon="checkmark-circle-outline" onPress={() => decide(j, 'approve', 'Approve job', 'Publish')} /><PrimaryButton label="Reject" variant="secondary" onPress={() => decide(j, 'reject', 'Reject job', 'Reject', true)} /></>}
-        {status === 'published' && <PrimaryButton label="Pause" variant="secondary" onPress={() => decide(j, 'pause', 'Pause job', 'Pause')} />}{['pending_review', 'published', 'paused'].includes(status) && <PrimaryButton label="Remove" variant="ghost" onPress={() => decide(j, 'remove', 'Remove job permanently from listings', 'Remove', true)} />}</Row></Card>)}</StateView></>;
+        {status === 'published' && <PrimaryButton label="Pause" variant="secondary" onPress={() => decide(j, 'pause', 'Pause job', 'Pause')} />}
+        {j.moderation_hold === 'admin' && (status === 'paused' || status === 'closed') && <PrimaryButton label="Lift moderation hold" variant="secondary" onPress={() => decide(j, 'reinstate', 'Lift hold so the employer can resume this job', 'Lift hold')} />}{['pending_review', 'published', 'paused'].includes(status) && <PrimaryButton label="Remove" variant="ghost" onPress={() => decide(j, 'remove', 'Remove job permanently from listings', 'Remove', true)} />}</Row></Card>)}</StateView></>;
 }
 
 function Reports({ ask, tick }: P) {
@@ -92,7 +93,7 @@ function Users({ ask, tick }: P) {
 function PrivacyQueue({ ask, tick }: P) {
   const q = useLoad(async () => (unwrap(await supabase.rpc('admin_privacy_queue')) ?? []) as any[], [tick]);
   const [done, setDone] = useState<string | null>(null);
-  return <><Banner>Deletion anonymises the profile and removes personal data. Stored files are purged by the service-role script <Text style={{ fontWeight: '900' }}>scripts/purge-storage.mjs</Text>. Data exports are generated instantly by the account holder.</Banner>{done && <Banner tone="success">{done}</Banner>}
+  return <><Banner>Deletion anonymises the profile and removes personal data. Stored files and the sign-in identity are removed afterwards by the trusted privacy worker (counted under "Deletion clean-up pending"). Data exports are generated instantly by the account holder.</Banner>{done && <Banner tone="success">{done}</Banner>}
     <StateView loading={q.loading} error={q.error} onRetry={q.reload} empty={(q.data ?? []).length === 0} emptyTitle="No open deletion requests">{(q.data ?? []).map((r) => <Card key={r.request_id} style={{ gap: 8 }}><Text style={styles.title}>{r.display_name} · account deletion</Text><Text style={styles.muted}>Requested {timeAgo(r.created_at)}. Confirm the identity of the requester before processing.</Text>
       <Row><PrimaryButton label="Process deletion" icon="trash-outline" onPress={() => ask({ title: `Delete account of ${r.display_name}`, message: 'This permanently removes their profile data. It cannot be undone.', confirm: 'Delete account', destructive: true, run: async (reason) => { const res = await supabase.rpc('admin_process_deletion', { p_request: r.request_id, p_reason: reason }); if (!res.error) setDone(`Processed. ${((res.data as any)?.storage_paths_to_purge ?? []).length} stored file(s) are queued for purge.`); return res; } })} />
         <PrimaryButton label="Reject request" variant="secondary" onPress={() => ask({ title: 'Reject deletion request', confirm: 'Reject', run: (reason) => supabase.rpc('admin_reject_privacy_request', { p_request: r.request_id, p_reason: reason }) })} /></Row></Card>)}</StateView></>;
@@ -105,9 +106,25 @@ function Audit() {
     <StateView loading={q.loading} error={q.error} onRetry={q.reload} empty={(q.data ?? []).length === 0} emptyTitle="No matching events">{(q.data ?? []).map((e) => <Card key={e.id} style={{ gap: 3, padding: 14 }}><Text style={styles.title}>{e.action}</Text><Text style={styles.muted}>{new Date(e.created_at).toLocaleString('en-IN')} · by {e.actor_name ?? 'system'} · {e.target_type}</Text>{Object.keys(e.metadata ?? {}).length > 0 && <Text style={styles.muted}>{JSON.stringify(e.metadata)}</Text>}</Card>)}</StateView></>;
 }
 
-function System() {
-  const q = useLoad(async () => (unwrap(await supabase.rpc('admin_email_failures')) ?? []) as any[], []);
-  return <><SectionHead title="Failed email deliveries" sub="Emails retry automatically up to 5 times with backoff, then appear here." /><StateView loading={q.loading} error={q.error} onRetry={q.reload} empty={(q.data ?? []).length === 0} emptyTitle="No failed emails">{(q.data ?? []).map((e) => <Card key={e.id} style={{ gap: 3, padding: 14 }}><Text style={styles.title}>{e.kind}</Text><Text style={styles.muted}>{e.attempts} attempts · {timeAgo(e.created_at)} · {e.last_error ?? 'unknown error'}</Text></Card>)}</StateView></>;
+function System({ ask, tick }: P) {
+  const status = useLoad(async () => unwrap(await supabase.rpc('admin_email_status')) as { by_status: Record<string, number>; oldest_pending_minutes: number | null; last_sent_at: string | null }, [tick]);
+  const q = useLoad(async () => (unwrap(await supabase.rpc('admin_email_failures')) ?? []) as any[], [tick]);
+  const resumes = useLoad(async () => (unwrap(await supabase.rpc('admin_resume_queue')) ?? []) as any[], [tick]);
+  const s = status.data;
+  return <>
+    <SectionHead title="Email delivery" sub="Messages stay queued until an email provider is connected and the worker runs. Nothing is marked sent unless the provider accepted it." />
+    <StateView loading={status.loading} error={status.error} onRetry={status.reload}>{s && <Card style={{ gap: 6 }}>
+      <Text style={styles.body}>{Object.entries(s.by_status).map(([k, v]) => `${labelize(k)}: ${v}`).join(' · ') || 'No email has been queued yet.'}</Text>
+      <Text style={styles.muted}>Oldest waiting: {s.oldest_pending_minutes === null ? 'none' : `${s.oldest_pending_minutes} min`} · Last delivered: {s.last_sent_at ? timeAgo(s.last_sent_at) : 'never'}</Text>
+      {(s.by_status.pending ?? 0) > 0 && !s.last_sent_at && <Banner tone="warn">Emails are queued but none has ever been delivered. The email provider is probably not connected yet (see docs/OWNER_ACTIONS.md).</Banner>}
+    </Card>}</StateView>
+    <SectionHead title="Failed email deliveries" sub="After 5 failed attempts with backoff, a message stops retrying and appears here." />
+    <StateView loading={q.loading} error={q.error} onRetry={q.reload} empty={(q.data ?? []).length === 0} emptyTitle="No failed emails">{(q.data ?? []).map((e) => <Card key={e.id} style={{ gap: 3, padding: 14 }}><Text style={styles.title}>{e.kind}</Text><Text style={styles.muted}>{e.attempts} attempts · {timeAgo(e.created_at)} · {e.last_error ?? 'unknown error'}</Text></Card>)}</StateView>
+    <SectionHead title="Resume security queue" sub="File contents are never shown here. Quarantined files cannot be downloaded by anyone until a scanner marks them clean." />
+    <StateView loading={resumes.loading} error={resumes.error} onRetry={resumes.reload} empty={(resumes.data ?? []).length === 0} emptyTitle="No resumes waiting or blocked">{(resumes.data ?? []).map((r) => <Card key={r.resume_id} style={styles.rowCard}>
+      <View style={{ flex: 1 }}><Text style={styles.title}>{labelize(r.scan_status)}{r.scan_detail ? ` · ${r.scan_detail}` : ''}</Text><Text style={styles.muted}>Uploaded {timeAgo(r.created_at)} · {r.scan_attempts} scan attempts</Text></View>
+      {r.scan_status === 'failed' && <PrimaryButton label="Retry scan" variant="secondary" onPress={() => ask({ title: 'Retry the security scan', confirm: 'Retry', run: (reason) => supabase.rpc('admin_retry_resume_scan', { p_resume: r.resume_id, p_reason: reason }) })} />}</Card>)}</StateView>
+  </>;
 }
 
 function Access({ ask, tick }: P) {

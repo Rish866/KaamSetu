@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import { createDb, failure } from './harness.mjs';
 import { loc, skill } from './fixtures.mjs';
 
-test('mandatory journey: register -> profile -> resume -> company -> verify -> job -> match -> apply -> pipeline -> offer -> export -> deletion -> isolation', async (t) => {
+test('database-simulated journey (SQL + RLS roles, no UI): register -> profile -> resume -> company -> verify -> job -> match -> apply -> pipeline -> offer -> export -> deletion -> isolation', async (t) => {
   const api = await createDb();
   const admin = await api.signUp('candidate', 'Owner Admin'); await api.grantAdmin(admin, 'admin');
   const as = (u, sql, p) => api.as(u, async (s) => (await s(sql, p)).rows);

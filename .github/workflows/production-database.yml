@@ -1,0 +1,151 @@
+name: Production database
+
+# Manual, audited operations on production Supabase (project zrexqtzhdkkupyxmfqxd).
+# Secrets required (owner adds them in Settings > Secrets and variables > Actions):
+#   SUPABASE_ACCESS_TOKEN, SUPABASE_DB_PASSWORD, BACKUP_PASSPHRASE (backups are encrypted; this repository is public).
+# Dispatch with ref = the branch whose migrations should be checked or applied.
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: status | backup | dry-run | apply | checks
+        type: choice
+        options: [status, backup, dry-run, apply, checks]
+        default: status
+      confirm:
+        description: 'Required for apply: type APPLY zrexqtzhdkkupyxmfqxd'
+        required: false
+        default: ''
+
+permissions:
+  contents: read
+
+concurrency:
+  group: production-database
+  cancel-in-progress: false
+
+env:
+  PROJECT_REF: zrexqtzhdkkupyxmfqxd
+
+jobs:
+  database:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check required secrets and confirmation
+        env:
+          T: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          P: ${{ secrets.SUPABASE_DB_PASSWORD }}
+          B: ${{ secrets.BACKUP_PASSPHRASE }}
+          ACTION: ${{ inputs.action }}
+          CONFIRM: ${{ inputs.confirm }}
+        run: |
+          missing=""
+          [ -z "$T" ] && missing="$missing SUPABASE_ACCESS_TOKEN"
+          [ -z "$P" ] && missing="$missing SUPABASE_DB_PASSWORD"
+          if [ "$ACTION" = "backup" ] || [ "$ACTION" = "apply" ]; then [ -z "$B" ] && missing="$missing BACKUP_PASSPHRASE"; fi
+          if [ -n "$missing" ]; then echo "::error::Missing repository secrets:$missing"; exit 1; fi
+          if [ "$ACTION" = "apply" ] && [ "$CONFIRM" != "APPLY $PROJECT_REF" ]; then echo "::error::apply requires confirm = 'APPLY $PROJECT_REF'"; exit 1; fi
+          echo "Ref: $GITHUB_REF @ $GITHUB_SHA, action: $ACTION"
+
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Link project
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+        run: supabase link --project-ref "$PROJECT_REF" --password "$SUPABASE_DB_PASSWORD"
+
+      - name: Migration history (remote vs this ref)
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+        run: supabase migration list --linked --password "$SUPABASE_DB_PASSWORD"
+
+      - name: Resolve session-pooler connection (Management API)
+        id: conn
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+        run: |
+          cfg=$(curl -sSf -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" "https://api.supabase.com/v1/projects/$PROJECT_REF/config/database/pooler")
+          cs=$(echo "$cfg" | jq -r '([.[] | select(.database_type == "PRIMARY")][0] // .[0]).connection_string')
+          [ -n "$cs" ] && [ "$cs" != "null" ] || { echo "::error::Could not resolve the pooler connection string"; exit 1; }
+          pw=$(jq -rn --arg p "$SUPABASE_DB_PASSWORD" '$p|@uri')
+          # Session mode (port 5432) supports psql; the API returns the transaction-mode string (6543).
+          url=$(echo "$cs" | sed -e "s|\[YOUR-PASSWORD\]|$pw|" -e 's|:6543/|:5432/|')
+          case "$url" in *sslmode=*) ;; *\?*) url="$url&sslmode=require" ;; *) url="$url?sslmode=require" ;; esac
+          echo "::add-mask::$url"
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+
+      - name: Pre-flight data checks (read-only)
+        if: inputs.action != 'checks'
+        env:
+          DB_URL: ${{ steps.conn.outputs.url }}
+        run: psql "$DB_URL" -v ON_ERROR_STOP=1 -f scripts/preflight.sql
+
+      - name: Encrypted backup (schema, data, roles)
+        if: inputs.action == 'backup' || inputs.action == 'apply'
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+          BACKUP_PASSPHRASE: ${{ secrets.BACKUP_PASSPHRASE }}
+        run: |
+          set -euo pipefail
+          stamp=$(date -u +%Y%m%dT%H%M%SZ); mkdir -p backup
+          supabase db dump --linked --password "$SUPABASE_DB_PASSWORD" -f "backup/$stamp-schema.sql"
+          supabase db dump --linked --password "$SUPABASE_DB_PASSWORD" --data-only -f "backup/$stamp-data.sql"
+          supabase db dump --linked --password "$SUPABASE_DB_PASSWORD" --role-only -f "backup/$stamp-roles.sql"
+          for f in backup/*.sql; do
+            echo "$BACKUP_PASSPHRASE" | gpg --batch --yes --pinentry-mode loopback --passphrase-fd 0 --symmetric --cipher-algo AES256 -o "$f.gpg" "$f"
+            shred -u "$f"
+          done
+          (cd backup && sha256sum *.gpg | tee SHA256SUMS.txt && wc -c *.gpg)
+          echo "BACKUP_STAMP=$stamp" >> "$GITHUB_ENV"
+
+      - uses: actions/upload-artifact@v4
+        if: inputs.action == 'backup' || inputs.action == 'apply'
+        with:
+          name: production-backup-${{ env.BACKUP_STAMP }}
+          path: backup/
+          retention-days: 30
+          if-no-files-found: error
+
+      - name: Dry run
+        if: inputs.action == 'dry-run' || inputs.action == 'apply'
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+        run: supabase db push --linked --dry-run --password "$SUPABASE_DB_PASSWORD"
+
+      - name: Apply unapplied migrations
+        if: inputs.action == 'apply'
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+        run: supabase db push --linked --yes --password "$SUPABASE_DB_PASSWORD"
+
+      - name: Migration history after apply
+        if: inputs.action == 'apply'
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+        run: supabase migration list --linked --password "$SUPABASE_DB_PASSWORD"
+
+      - name: Production catalog checks (RLS, grants, private buckets)
+        if: inputs.action == 'apply' || inputs.action == 'checks'
+        env:
+          DB_URL: ${{ steps.conn.outputs.url }}
+        run: psql "$DB_URL" -v ON_ERROR_STOP=1 -f scripts/production-checks.sql
+
+      - uses: actions/setup-node@v4
+        if: inputs.action == 'apply' || inputs.action == 'checks'
+        with:
+          node-version: 22
+      - name: Public API verification (anonymous, read-only)
+        if: inputs.action == 'apply' || inputs.action == 'checks'
+        run: node scripts/verify-production.mjs --expect-schema 202611200004 || echo "::warning::Public verification reported failures (expected until the v1.4.0 website is deployed)."

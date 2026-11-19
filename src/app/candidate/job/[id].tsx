@@ -60,7 +60,7 @@ export default function JobDetail() {
             <Row><PrimaryButton label={busy ? 'Sending…' : 'Apply with my profile'} disabled={busy} icon="paper-plane-outline" onPress={() => setConfirmApply(true)} /><PrimaryButton label={data.saved ? 'Saved' : 'Save for later'} variant="secondary" icon={data.saved ? 'bookmark' : 'bookmark-outline'} onPress={toggleSave} /></Row></>}
           <PrimaryButton label="Report this job" variant="ghost" icon="flag-outline" onPress={() => setReporting(true)} />
         </Card>
-        <ConfirmDialog visible={confirmApply} title="Send your application?" message="The employer will see your name, profile, skills and match score. You can withdraw later." confirmLabel="Send application" onCancel={() => setConfirmApply(false)} onConfirm={async () => { setConfirmApply(false); await apply(); }} />
+        <ConfirmDialog visible={confirmApply} title="Send your application?" message="The employer will see your name, profile, skills, match score and your resume (once it has passed security checks). Your email and phone stay hidden until you are shortlisted and agree in Settings. You can withdraw later." confirmLabel="Send application" onCancel={() => setConfirmApply(false)} onConfirm={async () => { setConfirmApply(false); await apply(); }} />
         <ConfirmDialog visible={reporting} title="Report this job" confirmLabel="Send report" destructive requireReason minReason={5} onCancel={() => setReporting(false)} onConfirm={report} message="Tell us what is wrong. Never pay money to get a job."><Chips label="Category" options={reportCategories} selected={[category]} onToggle={setCategory} /></ConfirmDialog>
       </>}
     </StateView>

@@ -25,7 +25,7 @@ export function SettingsView({ role }: { role: 'Candidate' | 'Employer' }) {
   const prefs = useLoad(async () => (unwrap(await supabase.from('notification_preferences').select('email_updates').maybeSingle()) as { email_updates: boolean } | null)?.email_updates ?? true, []);
   const requests = useLoad(async () => (unwrap(await supabase.from('privacy_requests').select('id,kind,status,created_at').order('created_at', { ascending: false }).limit(10)) ?? []) as { id: string; kind: string; status: string; created_at: string }[], []);
   const [msg, setMsg] = useState<{ tone: 'error' | 'success'; text: string } | null>(null);
-  const [pw, setPw] = useState(''); const [pw2, setPw2] = useState(''); const [email, setEmail] = useState('');
+  const [current, setCurrent] = useState(''); const [pw, setPw] = useState(''); const [pw2, setPw2] = useState(''); const [email, setEmail] = useState('');
   const [confirmDelete, setConfirmDelete] = useState(false); const [confirmAll, setConfirmAll] = useState(false);
   const ok = (text: string) => setMsg({ tone: 'success', text }); const bad = (e: { message?: string; code?: string }) => setMsg({ tone: 'error', text: friendlyError(e) });
   const granted = (p: string) => (consents.data ?? []).find((c) => c.purpose === p)?.action === 'granted';
@@ -37,7 +37,11 @@ export function SettingsView({ role }: { role: 'Candidate' | 'Employer' }) {
   async function changePassword() {
     const problem = validatePassword(pw); if (problem) return setMsg({ tone: 'error', text: problem });
     if (pw !== pw2) return setMsg({ tone: 'error', text: 'The two passwords do not match.' });
-    const { error } = await supabase.auth.updateUser({ password: pw }); if (error) return bad(error); setPw(''); setPw2(''); ok('Password changed. We emailed you a security notice.');
+    // Re-authenticate with the current password first, so a borrowed unlocked device cannot change it.
+    const user = session?.user; if (!user || !current) return setMsg({ tone: 'error', text: 'Enter your current password.' });
+    const check = user.email ? await supabase.auth.signInWithPassword({ email: user.email, password: current }) : await supabase.auth.signInWithPassword({ phone: user.phone ?? '', password: current });
+    if (check.error) return setMsg({ tone: 'error', text: 'Your current password is incorrect.' });
+    const { error } = await supabase.auth.updateUser({ password: pw }); if (error) return bad(error); setCurrent(''); setPw(''); setPw2(''); ok('Password changed. A security notice was added to your notifications.');
   }
   async function changeEmail() {
     if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return setMsg({ tone: 'error', text: 'Enter a valid email address.' });
@@ -64,11 +68,12 @@ export function SettingsView({ role }: { role: 'Candidate' | 'Employer' }) {
       <Card style={{ gap: 6 }}><Text style={styles.title}>Consent history</Text>{(consents.data ?? []).slice(0, 12).map((c, i) => <Text key={i} style={styles.muted}>{new Date(c.created_at).toLocaleString('en-IN')} · {c.purpose.replace(/_/g, ' ')} · {c.action}</Text>)}</Card>
     </StateView>
     <SectionHead title="Email" />
-    <Card style={{ gap: 10 }}><View style={styles.consent}><View style={{ flex: 1 }}><Text style={styles.title}>Optional update emails</Text><Text style={styles.muted}>Application views and employer responses. Essential emails (account security, interviews, offers) cannot be turned off.</Text></View>
+    <Card style={{ gap: 10 }}><View style={styles.consent}><View style={{ flex: 1 }}><Text style={styles.title}>Optional update emails</Text><Text style={styles.muted}>Optional: application viewed, interview confirmations and other non-urgent updates. Security emails and messages about shortlisting, interviews, offers and decisions are always sent. In-app notifications are unaffected.</Text></View>
       <PrimaryButton label={prefs.data === false ? 'Off · Turn on' : 'On · Turn off'} variant="secondary" onPress={async () => { const { error } = await supabase.rpc('set_notification_preferences', { p_email_updates: prefs.data === false }); if (error) return bad(error); await prefs.reload(); ok('Email preference saved.'); }} /></View></Card>
     <SectionHead title="Account security" />
     <Card style={{ gap: 12 }}>
       <Text style={styles.muted}>Signed in as {session?.user.email ?? session?.user.phone ?? access?.display_name}.</Text>
+      <Field label="Current password" value={current} onChangeText={setCurrent} secureTextEntry autoComplete="current-password" />
       <Row><Field label="New password" value={pw} onChangeText={setPw} secureTextEntry autoComplete="new-password" hint="At least 10 characters with upper case, lower case and a number." /><Field label="Repeat new password" value={pw2} onChangeText={setPw2} secureTextEntry autoComplete="new-password" /></Row>
       <PrimaryButton label="Change password" icon="key-outline" onPress={changePassword} />
       <Field label="Change email address" value={email} onChangeText={setEmail} autoCapitalize="none" keyboardType="email-address" hint="We email a confirmation link to both addresses." /><PrimaryButton label="Send confirmation link" variant="secondary" onPress={changeEmail} />
@@ -77,10 +82,10 @@ export function SettingsView({ role }: { role: 'Candidate' | 'Employer' }) {
     </Card>
     <SectionHead title="Your data" />
     <Card style={{ gap: 12 }}>
-      <Text style={styles.muted}>Download everything we hold about you as a JSON file, or ask us to delete your account. Deleting removes your profile, resume and skills; consent and security records may be kept as required by law.</Text>
+      <Text style={styles.muted}>Download your account, profile, applications, invitations, consents and disclosures as a JSON file, or ask us to delete your account. Resume files are not included in the export; download them from your profile. Deleting removes your profile, resume and skills; consent and security records may be kept as required by law.</Text>
       <Row><PrimaryButton label="Download my data" icon="download-outline" onPress={exportData} />
         {openDeletion ? <PrimaryButton label="Cancel deletion request" variant="secondary" onPress={async () => { const { error } = await supabase.rpc('cancel_privacy_request', { p_request: openDeletion.id }); if (error) return bad(error); await requests.reload(); ok('Deletion request cancelled.'); }} /> : <PrimaryButton label="Request account deletion" variant="secondary" icon="trash-outline" onPress={() => setConfirmDelete(true)} />}</Row>
-      {openDeletion && <Banner tone="warn">Deletion requested on {new Date(openDeletion.created_at).toLocaleDateString('en-IN')}. Our privacy team will confirm by email. You can cancel until it is processed.</Banner>}
+      {openDeletion && <Banner tone="warn">Deletion requested on {new Date(openDeletion.created_at).toLocaleDateString('en-IN')}. Our privacy team will process it after confirming it is you. You can cancel until then. We send a final confirmation to your current email address.</Banner>}
       <Text style={styles.muted}>Privacy questions: <Text style={{ color: colors.teal }} onPress={() => Linking.openURL(`mailto:${PRIVACY_EMAIL}`)}>{PRIVACY_EMAIL}</Text></Text>
     </Card>
     <ConfirmDialog visible={confirmDelete} destructive title="Request account deletion?" message="Your profile, skills and resume will be removed once our privacy team processes the request. Active applications are withdrawn. This cannot be undone after processing." confirmLabel="Request deletion" onCancel={() => setConfirmDelete(false)} onConfirm={async () => { setConfirmDelete(false); const { error } = await supabase.rpc('request_account_deletion'); if (error) return bad(error); await requests.reload(); ok('Deletion requested.'); }} />

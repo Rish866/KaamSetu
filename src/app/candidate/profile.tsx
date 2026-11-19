@@ -30,7 +30,7 @@ export default function ProfileScreen() {
       supabase.from('candidate_profiles').select('*').eq('user_id', uid).single(), supabase.from('candidate_skills').select('skill_id').eq('candidate_id', uid).eq('confirmed', true),
       supabase.from('candidate_locations').select('location_id,preference_rank').eq('candidate_id', uid).order('preference_rank'), supabase.from('candidate_education').select('*').eq('candidate_id', uid).order('end_year', { ascending: false }),
       supabase.from('candidate_experience').select('*').eq('candidate_id', uid).order('start_date', { ascending: false }), supabase.from('candidate_certifications').select('*').eq('candidate_id', uid),
-      supabase.from('candidate_languages').select('*').eq('candidate_id', uid), supabase.from('resumes').select('id,original_name,byte_size,scan_status,parse_status,active,created_at,storage_path').eq('candidate_id', uid).order('created_at', { ascending: false }),
+      supabase.from('candidate_languages').select('*').eq('candidate_id', uid), supabase.from('resumes').select('id,original_name,byte_size,scan_status,scan_detail,parse_status,active,created_at,storage_path').eq('candidate_id', uid).order('created_at', { ascending: false }),
       supabase.from('resume_extractions').select('*').eq('candidate_id', uid).eq('status', 'pending_review').maybeSingle()]);
     return { profile: unwrap(p) as unknown as Profile, skills: (unwrap(cs) ?? []).map((r) => r.skill_id), locations: unwrap(cl) ?? [], education: unwrap(ed) ?? [], experience: unwrap(ex) ?? [], certs: unwrap(ce) ?? [], languages: unwrap(la) ?? [], resumes: unwrap(re) ?? [], extraction: unwrap(xt) };
   }, [uid]);
@@ -114,9 +114,11 @@ export default function ProfileScreen() {
           fields={[['name', 'Certification'], ['issuer', 'Issuer (optional)'], ['year', 'Year (optional)', 'int']]} />
         <Card style={{ gap: 10 }}><SectionHead title="Languages" />{b.languages.map((l) => <Row key={l.language}><Text style={styles.line}>{l.language} · {labelize(l.proficiency)}</Text><PrimaryButton label="Remove" variant="ghost" onPress={async () => { const { error } = await supabase.from('candidate_languages').delete().eq('candidate_id', uid).eq('language', l.language); if (error) return bad(error); await refresh(); }} /></Row>)}
           <LanguageAdd uid={uid} onChange={refresh} onError={bad} /></Card>
-        <Card style={{ gap: 12 }}><SectionHead title="Resume" sub="PDF or Word, up to 5 MB. Stored privately. Employers only see it after you apply." />
-          {b.resumes.filter((r) => r.active).map((r) => <View key={r.id} style={{ gap: 8 }}><Text style={styles.line}>{r.original_name} · {(r.byte_size / 1024).toFixed(0)} KB · {r.scan_status === 'clean' ? 'Scanned: clean' : r.scan_status === 'pending' ? 'Waiting for security scan' : `Scan: ${r.scan_status}`}</Text>
+        <Card style={{ gap: 12 }}><SectionHead title="Resume" sub="PDF or Word, up to 5 MB. Stored privately. When you apply, the employer can open your resume once it has passed security checks." />
+          {b.resumes.filter((r) => r.active).map((r) => <View key={r.id} style={{ gap: 8 }}><Text style={styles.line}>{r.original_name} · {(r.byte_size / 1024).toFixed(0)} KB</Text>
+            <ResumeStatus scan={r.scan_status} detail={r.scan_detail} parse={r.parse_status} />
             <Row><PrimaryButton label="Download" variant="secondary" icon="download-outline" disabled={r.scan_status !== 'clean'} onPress={() => download(r.storage_path)} /><PrimaryButton label="Delete" variant="ghost" icon="trash-outline" onPress={() => setDelResume(r)} /></Row></View>)}
+          {b.resumes.filter((r) => !r.active && (r.scan_status === 'infected' || r.scan_status === 'failed')).slice(0, 1).map((r) => <Banner key={r.id} tone="error">Your last upload ({r.original_name}) was not accepted: {blockedReason(r.scan_detail, r.scan_status)}. Upload a different file.</Banner>)}
           {b.resumes.every((r) => !r.active) && <Text style={styles.muted}>No resume uploaded.</Text>}
           <PrimaryButton label={b.resumes.some((r) => r.active) ? 'Replace resume' : 'Upload resume'} icon="cloud-upload-outline" onPress={() => upload('resume')} />
           {b.extraction && <Card style={styles.review}><Text style={styles.line}>Suggested from your resume. Choose what to add:</Text><ExtractionReview extraction={b.extraction} onDone={refresh} onError={bad} /></Card>}
@@ -128,8 +130,8 @@ export default function ProfileScreen() {
           <Text style={styles.muted}>Expected: {b.profile.salary_min ? formatSalaryAmount(b.profile.salary_min, b.profile.salary_period) : 'not set'}</Text>
           <Row><Pill tone={b.profile.discovery_enabled ? 'teal' : 'neutral'}>{b.profile.discovery_enabled ? 'Discovery on' : 'Discovery off'}</Pill>
             <PrimaryButton label={b.profile.discovery_enabled ? 'Turn discovery off' : 'Turn discovery on'} variant="secondary" onPress={async () => { const { error } = await supabase.rpc('set_consent', { p_purpose: 'employer_discovery', p_granted: !b.profile.discovery_enabled, p_notice_version: NOTICE_VERSION }); if (error) return bad(error); setMsg({ tone: 'success', text: b.profile.discovery_enabled ? 'You are hidden from employer search.' : 'Verified employers can now find your masked profile.' }); await refresh(); }} /></Row></Card>
-        <ConfirmDialog visible={!!delResume} destructive title="Delete this resume?" message="The file is removed from private storage. Applications already sent keep a record that you applied." confirmLabel="Delete resume" onCancel={() => setDelResume(null)}
-          onConfirm={async () => { const r = delResume; setDelResume(null); const { data, error } = await supabase.rpc('delete_resume', { p_resume: r.id }); if (error) return bad(error); await supabase.storage.from('resumes').remove([data as string]); setMsg({ tone: 'success', text: 'Resume deleted.' }); await refresh(); }} />
+        <ConfirmDialog visible={!!delResume} destructive title="Delete this resume?" message="The file stops being available immediately and is permanently removed from private storage by our processing service. Applications already sent keep a record that you applied." confirmLabel="Delete resume" onCancel={() => setDelResume(null)}
+          onConfirm={async () => { const r = delResume; setDelResume(null); const { error } = await supabase.rpc('delete_resume', { p_resume: r.id }); if (error) return bad(error); setMsg({ tone: 'success', text: 'Resume deleted.' }); await refresh(); }} />
       </>}
     </StateView>
   </AppShell>;
@@ -167,3 +169,22 @@ function ExtractionReview({ extraction, onDone, onError }: { extraction: { resum
     <Row><PrimaryButton label="Add selected to my profile" onPress={async () => { const { error } = await supabase.rpc('accept_resume_extraction', { p_resume: extraction.resume_id, p_skills: sel, p_headline: headline || null }); if (error) return onError(error); await onDone(); }} /><PrimaryButton label="Dismiss" variant="ghost" onPress={async () => { await supabase.rpc('reject_resume_extraction', { p_resume: extraction.resume_id }); await onDone(); }} /></Row></View>;
 }
 const styles = StyleSheet.create({ muted: { color: colors.inkSoft, fontSize: 14, lineHeight: 20 }, line: { color: colors.ink, fontSize: 15, flex: 1, minWidth: 200 }, photo: { width: 72, height: 72, borderRadius: 24, backgroundColor: colors.tealPale, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }, photoImg: { width: 72, height: 72 }, photoLetter: { color: colors.tealDark, fontSize: 28, fontWeight: '900' }, review: { backgroundColor: '#FAFAFF', gap: 10 }, previewTitle: { color: colors.ink, fontSize: 18, fontWeight: '900' } });
+
+const reasons: Record<string, string> = {
+  not_a_pdf: 'the file is not a real PDF', not_a_docx: 'the file is not a real Word document', truncated_pdf: 'the PDF is incomplete',
+  pdf_javascript: 'the PDF contains scripts', pdf_launch_action: 'the PDF tries to open other programs', pdf_embedded_file: 'the PDF contains attached files',
+  pdf_rich_media: 'the PDF contains embedded media', pdf_xfa_form: 'the PDF contains an interactive form', docx_macros: 'the document contains macros',
+  docx_embedded_object: 'the document contains embedded objects', docx_executable_entry: 'the document contains a program file', archive_too_large: 'the file expands to an unsafe size',
+  corrupt_archive: 'the file is damaged', size_mismatch: 'the upload did not complete', empty_file: 'the file is empty',
+};
+function blockedReason(detail: string | null, scan: string) {
+  if (scan === 'infected') return 'our virus scanner flagged it';
+  return (detail && reasons[detail]) || 'it could not be checked';
+}
+/** Explains exactly where the resume is in the security pipeline. Nothing here is shown as "done" before it is. */
+function ResumeStatus({ scan, detail, parse }: { scan: string; detail: string | null; parse: string }) {
+  if (scan === 'clean') return <Text style={styles.muted}>Security check: passed. {parse === 'pending' ? 'Reading suggestions…' : parse === 'skipped' ? 'Resume reading is off (Settings).' : parse === 'unavailable' ? 'Resume reading is not available yet.' : ''}</Text>;
+  if (scan === 'pending') return <Banner tone="warn">Quarantined: this resume is waiting for a security scan{detail === 'awaiting_scanner' ? ' (the scanning service is not connected yet)' : ''}. Until it passes, you cannot download it and employers cannot see it. Your profile and applications still work.</Banner>;
+  return <Banner tone="error">Not accepted: {blockedReason(detail, scan)}.</Banner>;
+}
+

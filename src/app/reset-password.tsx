@@ -37,7 +37,7 @@ export default function ResetPasswordScreen() {
 }
 
 function Field({ label, ...props }: React.ComponentProps<typeof TextInput> & { label: string }) {
-  return <View style={styles.field}><Text style={styles.label}>{label}</Text><TextInput {...props} style={styles.input} placeholder="Minimum 8 characters" placeholderTextColor="#9AA1B2" /></View>;
+  return <View style={styles.field}><Text style={styles.label}>{label}</Text><TextInput {...props} style={styles.input} placeholder="At least 10 characters" placeholderTextColor="#9AA1B2" /></View>;
 }
 
 const styles = StyleSheet.create({

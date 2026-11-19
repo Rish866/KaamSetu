@@ -45,7 +45,7 @@ export default function PostJobScreen() {
     setLocations((loc.data ?? []).map((l) => ({ id: l.id, label: l.locality ? `${l.locality}, ${l.city}` : l.city })));
     setSkills((sk.data ?? []).map((k) => ({ id: k.id, label: k.name })));
     if (editId) {
-      const [j, js] = await Promise.all([supabase.from('jobs').select('*').eq('id', editId).eq('company_id', data.company_id).single(), supabase.from('job_skills').select('skill_id').eq('job_id', editId)]);
+      const [j, js] = await Promise.all([supabase.from('jobs').select('title,description,salary_min,salary_max,experience_min_months,experience_max_months,work_mode,employment_type,location_id,status').eq('id', editId).eq('company_id', data.company_id).single(), supabase.from('job_skills').select('skill_id').eq('job_id', editId)]);
       if (j.error || !j.data || !['draft', 'rejected'].includes(j.data.status)) return setMessage('Only drafts and rejected jobs can be edited.');
       const d = j.data;
       setTitle(d.title); setDescription(d.description); setSalaryMin(String(d.salary_min)); setSalaryMax(String(d.salary_max)); setExpMin(String(d.experience_min_months / 12));

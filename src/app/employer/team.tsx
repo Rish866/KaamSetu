@@ -23,12 +23,15 @@ export default function Team() {
   const [p, setP] = useState<Record<string, string> | null>(null);
   if (m && !p) setP({ display_name: m.company.display_name, website: m.company.website ?? '', description: m.company.description ?? '', city: m.company.city ?? '', industry: m.company.industry ?? '', company_size: m.company.company_size ?? '', registered_address: m.company.registered_address ?? '', operating_locations: (m.company.operating_locations ?? []).join(', ') });
   const bad = (e: { message?: string; code?: string }) => setMsg({ tone: 'error', text: friendlyError(e) });
+  const identityLocked = Boolean(m && ['pending', 'approved', 'suspended'].includes(m.company.verification_status));
   async function run(fn: () => PromiseLike<{ error: { message?: string; code?: string } | null }>, ok: string) { const { error } = await fn(); if (error) return bad(error); setMsg({ tone: 'success', text: ok }); await Promise.all([team.reload(), invs.reload()]); }
   async function saveProfile() {
     if (!m || !p) return;
     if (p.website && !/^https?:\/\/\S+$/.test(p.website)) return setMsg({ tone: 'error', text: 'Website must start with http:// or https://' });
-    const { error } = await supabase.from('companies').update({ display_name: p.display_name.trim(), website: p.website.trim() || null, description: p.description.trim() || null, city: p.city.trim() || null, industry: p.industry.trim() || null,
-      company_size: p.company_size || null, registered_address: p.registered_address.trim() || null, operating_locations: p.operating_locations.split(',').map((x) => x.trim()).filter(Boolean) }).eq('id', m.company.id);
+    const fields: Record<string, unknown> = { description: p.description, city: p.city, industry: p.industry, company_size: p.company_size,
+      operating_locations: p.operating_locations.split(',').map((x) => x.trim()).filter(Boolean) };
+    if (!identityLocked) Object.assign(fields, { display_name: p.display_name, website: p.website, registered_address: p.registered_address });
+    const { error } = await supabase.rpc('update_company_profile', { p_company: m.company.id, p_fields: fields });
     if (error) return bad(error); setMsg({ tone: 'success', text: 'Company profile saved.' }); await membership.reload();
   }
 
@@ -37,11 +40,12 @@ export default function Team() {
     <StateView loading={membership.loading} error={membership.error} onRetry={membership.reload} empty={!m} emptyTitle="Create your company first">
       {m && p && <>
         <Card style={{ gap: 12 }}><SectionHead title="Company profile" sub="Shown to candidates on your jobs. The legal name is fixed after submission." />
-          <Field label="Public brand name" value={p.display_name} editable={owner} onChangeText={(v) => setP({ ...p, display_name: v })} /><Field label="Website" value={p.website} editable={owner} onChangeText={(v) => setP({ ...p, website: v })} autoCapitalize="none" />
+          {identityLocked && <Text style={styles.muted}>Brand name, website and registered address are locked after you submit verification. Email support to change them.</Text>}
+          <Field label="Public brand name" value={p.display_name} editable={owner && !identityLocked} onChangeText={(v) => setP({ ...p, display_name: v })} /><Field label="Website" value={p.website} editable={owner && !identityLocked} onChangeText={(v) => setP({ ...p, website: v })} autoCapitalize="none" />
           <Field label="About the company" value={p.description} editable={owner} onChangeText={(v) => setP({ ...p, description: v })} multiline maxLength={3000} />
           <Row><Field label="Industry" value={p.industry} editable={owner} onChangeText={(v) => setP({ ...p, industry: v })} /><Field label="Headquarters city" value={p.city} editable={owner} onChangeText={(v) => setP({ ...p, city: v })} /></Row>
           <Chips label="Company size" options={sizes} selected={p.company_size ? [p.company_size] : []} onToggle={(s) => owner && setP({ ...p, company_size: s })} />
-          <Field label="Registered address" value={p.registered_address} editable={owner} onChangeText={(v) => setP({ ...p, registered_address: v })} multiline /><Field label="Operating locations (comma separated)" value={p.operating_locations} editable={owner} onChangeText={(v) => setP({ ...p, operating_locations: v })} />
+          <Field label="Registered address" value={p.registered_address} editable={owner && !identityLocked} onChangeText={(v) => setP({ ...p, registered_address: v })} multiline /><Field label="Operating locations (comma separated)" value={p.operating_locations} editable={owner} onChangeText={(v) => setP({ ...p, operating_locations: v })} />
           {owner ? <PrimaryButton label="Save company profile" icon="save-outline" onPress={saveProfile} /> : <Text style={styles.muted}>Only owners can edit the company profile.</Text>}</Card>
         <SectionHead title="Team" />
         <StateView loading={team.loading} error={team.error} onRetry={team.reload}>
