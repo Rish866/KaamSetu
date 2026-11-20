@@ -52,8 +52,14 @@ export async function signIn(p: Page, role: 'candidate' | 'employer' | 'admin', 
   await p.getByRole('textbox', { name: 'Password', exact: true }).fill(pw);
   await btn(p, 'Sign in securely').click();
 }
+/** Visible app messages (alerts and banners) to explain a failure. App messages never contain secrets. */
+export async function visibleMessages(p: Page) {
+  const texts = await p.getByRole('alert').allInnerTexts().catch(() => []);
+  return texts.map((t) => t.trim()).filter(Boolean).join(' | ') || '(no alert shown)';
+}
 export async function expectPortal(p: Page, role: 'candidate' | 'employer' | 'admin') {
-  await expect(p).toHaveURL(new RegExp(`/${role}(/|$|\\?)`), { timeout: 30_000 });
+  try { await expect(p).toHaveURL(new RegExp(`/${role}(/|$|\\?)`), { timeout: 30_000 }); }
+  catch { throw new Error(`Did not reach /${role}. URL ${p.url()}. Messages: ${await visibleMessages(p)}`); }
 }
 
 /** Reads the supabase-js session from localStorage (to call the API as that user from the test runner). */
@@ -82,5 +88,6 @@ export async function uploadResume(p: Page, text = 'QA resume CRM Customer suppo
   const chooser = p.waitForEvent('filechooser');
   await btn(p, /^(Upload resume|Replace resume)$/).click();
   await (await chooser).setFiles({ name: 'qa-resume.pdf', mimeType: 'application/pdf', buffer: minimalPdf(text) });
-  await expect(p.getByText(/Resume uploaded|Quarantined|Security check: passed/).first()).toBeVisible({ timeout: 30_000 });
+  try { await expect(p.getByText(/Resume uploaded|Quarantined|Security check: passed/).first()).toBeVisible({ timeout: 30_000 }); }
+  catch { throw new Error(`Resume upload did not complete. Messages: ${await visibleMessages(p)}`); }
 }

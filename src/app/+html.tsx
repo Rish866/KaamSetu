@@ -13,7 +13,8 @@ const csp = [
   "style-src 'self' 'unsafe-inline'",
   `img-src 'self' data: blob: ${supabaseOrigin}`,
   "font-src 'self' data:",
-  `connect-src 'self' ${supabaseOrigin} ${wsOrigin}`,
+  // blob: is required: picked files are read with fetch(blob:...) before upload (caught by the local-stack UI test).
+  `connect-src 'self' blob: ${supabaseOrigin} ${wsOrigin}`,
   "object-src 'none'",
   "base-uri 'self'",
   "form-action 'self'",

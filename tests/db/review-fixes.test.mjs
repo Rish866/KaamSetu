@@ -220,3 +220,13 @@ test('history tables reject DELETE and TRUNCATE, even for the table owner', asyn
     assert.match(await failure(api.q(`truncate ${t} cascade`)) ?? '', /cannot be truncated/, `truncate on ${t}`);
   }
 });
+
+test('hard-deleting an auth user with consent history is refused (accounts must go through the deletion workflow)', async () => {
+  // Documented behaviour: deleting a user from the Supabase dashboard cascades into consent_records, whose rows are
+  // immutable, so the delete fails instead of silently destroying consent evidence. Use the in-app deletion flow;
+  // the privacy worker then soft-deletes the auth identity (email/phone freed, history kept).
+  const c = await makeCandidate(api, 'Dashboard Delete');
+  assert.ok((await api.q('select count(*)::int n from public.consent_records where user_id=$1', [c.id])).rows[0].n >= 1);
+  assert.match(await failure(api.q('delete from auth.users where id=$1', [c.id])) ?? '', /immutable/);
+  assert.equal((await api.q('select count(*)::int n from public.profiles where id=$1', [c.id])).rows[0].n, 1);
+});
