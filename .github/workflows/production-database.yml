@@ -88,7 +88,9 @@ jobs:
         if: inputs.action == 'drift' || inputs.action == 'dry-run'
         env:
           DB_URL: ${{ steps.conn.outputs.url }}
-        run: psql "$DB_URL" -Atc "show server_version" -c "select extname || ' ' || extversion from pg_extension order by 1"
+        run: |
+          psql "$DB_URL" -At -c "show server_version" -c "select extname || ' ' || extversion from pg_extension order by 1"
+          psql "$DB_URL" -c "select p.oid::regprocedure as function, pg_get_userbyid(p.proowner) as owner, p.proacl from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname = 'public' and pg_get_userbyid(p.proowner) <> 'postgres'" -c "select evtname, evtevent, evtenabled, evtfoid::regprocedure, pg_get_userbyid(evtowner) as owner from pg_event_trigger order by 1"
 
       - name: Schema drift check (production vs. the migrations it has recorded as applied; read-only)
         if: inputs.action == 'drift'

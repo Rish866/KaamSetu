@@ -1,10 +1,11 @@
 import { useLocalSearchParams } from 'expo-router';
 import React, { useState } from 'react';
-import { Linking, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 import { AppShell } from '../../../components/AppShell';
 import { Banner, Chips, ConfirmDialog, Field, Row, StateView, unwrap, useLoad } from '../../../components/kit';
 import { Card, Pill, PrimaryButton } from '../../../components/ui';
 import { useMembership } from '../../../lib/company';
+import { openWhenReady } from '../../../lib/files';
 import { formatExperience, friendlyError, labelize, parseLocalDateTime, stageLabels, timeAgo } from '../../../lib/format';
 import { supabase } from '../../../lib/supabase';
 import { useAuth } from '../../../state/AuthContext';
@@ -41,9 +42,13 @@ export default function JobApplicants() {
   }
   // The resume is shared with the employer when the candidate applies; access is logged and the link expires in 60 seconds.
   async function openResume(a: Applicant) {
-    const { data: path, error } = await supabase.rpc('get_applicant_resume', { p_application: a.application_id }); if (error) return bad(error);
-    const { data, error: e2 } = await supabase.storage.from('resumes').createSignedUrl(path as string, 60); if (e2 || !data) return bad(e2 ?? { message: 'Could not open the resume.' });
-    await Linking.openURL(data.signedUrl);
+    try {
+      await openWhenReady(async () => {
+        const { data: path, error } = await supabase.rpc('get_applicant_resume', { p_application: a.application_id }); if (error) throw error;
+        const { data, error: e2 } = await supabase.storage.from('resumes').createSignedUrl(path as string, 60); if (e2 || !data) throw e2 ?? new Error('Could not open the resume.');
+        return data.signedUrl;
+      });
+    } catch (e) { bad(e as { message?: string; code?: string }); }
   }
   const all = apps.data ?? []; const shown = all.filter((a) => (!filter || a.stage === filter) && (!q || `${a.display_name} ${a.headline ?? ''}`.toLowerCase().includes(q.toLowerCase())));
   const count = (s: string) => all.filter((a) => a.stage === s).length;

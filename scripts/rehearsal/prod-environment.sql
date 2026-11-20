@@ -25,7 +25,8 @@ begin
     end if;
   end loop;
 end $function$;
-revoke all on function public.rls_auto_enable() from public, anon, authenticated, service_role, postgres;
+-- As in production: owned by supabase_admin, no explicit grants to API roles; PUBLIC keeps the default EXECUTE.
+revoke all on function public.rls_auto_enable() from anon, authenticated, service_role;
 drop event trigger if exists ensure_rls;
 create event trigger ensure_rls on ddl_command_end execute function public.rls_auto_enable();
 select 'production environment emulated' as step, (select usename from pg_user u join pg_proc p on p.proowner = u.usesysid where p.proname = 'rls_auto_enable') as rls_auto_enable_owner;

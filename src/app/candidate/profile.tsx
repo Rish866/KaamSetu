@@ -1,10 +1,10 @@
 import React, { useState } from 'react';
-import { Linking, Image, StyleSheet, Text, View } from 'react-native';
+import { Image, StyleSheet, Text, View } from 'react-native';
 import { AppShell } from '../../components/AppShell';
 import { Banner, Chips, ConfirmDialog, Field, Option, Row, SectionHead, StateView, unwrap, useLoad } from '../../components/kit';
 import { Card, Pill, PrimaryButton } from '../../components/ui';
 import { NOTICE_VERSION } from '../../content/legal';
-import { MAX_PHOTO_BYTES, MAX_RESUME_BYTES, PHOTO_TYPES, pickFile, RESUME_TYPES, resumeLink, uploadResume } from '../../lib/files';
+import { MAX_PHOTO_BYTES, MAX_RESUME_BYTES, openWhenReady, PHOTO_TYPES, pickFile, RESUME_TYPES, resumeLink, uploadResume } from '../../lib/files';
 import { formatExperience, formatSalaryAmount, friendlyError, labelize } from '../../lib/format';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../state/AuthContext';
@@ -82,7 +82,7 @@ export default function ProfileScreen() {
     } catch (e) { bad(e as { message?: string }); }
   }
   const [delResume, setDelResume] = useState<any | null>(null);
-  async function download(path: string) { try { await Linking.openURL(await resumeLink(path)); } catch (e) { bad(e as { message?: string }); } }
+  async function download(path: string) { try { await openWhenReady(() => resumeLink(path)); } catch (e) { bad(e as { message?: string }); } }
 
   const b = bundle.data;
   return <AppShell role="Candidate" title="Your profile" subtitle={completion.data ? `${completion.data.percent}% complete` : 'Keep it accurate for better matches'}>

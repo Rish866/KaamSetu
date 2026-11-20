@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
-import { Linking, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 import { AppShell } from '../components/AppShell';
 import { Banner, Chips, ConfirmDialog, Field, Row, SectionHead, StateView, unwrap, useLoad } from '../components/kit';
 import { Card, Metric, Pill, PrimaryButton } from '../components/ui';
+import { openWhenReady } from '../lib/files';
 import { formatSalaryRange, friendlyError, labelize, timeAgo } from '../lib/format';
 import { supabase } from '../lib/supabase';
 import { colors } from '../theme';
@@ -46,7 +47,7 @@ function Overview({ d, go }: { d: Dash; go: (t: string) => void }) {
 function Companies({ ask, tick, setMsg }: P) {
   const [status, setStatus] = useState('pending');
   const q = useLoad(async () => (unwrap(await supabase.rpc('admin_company_queue', { p_status: status })) ?? []) as any[], [status, tick]);
-  async function evidence(path: string) { const { data, error } = await supabase.storage.from('company-evidence').createSignedUrl(path, 60); if (error || !data) return setMsg({ tone: 'error', text: friendlyError(error) }); await Linking.openURL(data.signedUrl); }
+  async function evidence(path: string) { try { await openWhenReady(async () => { const { data, error } = await supabase.storage.from('company-evidence').createSignedUrl(path, 60); if (error || !data) throw error ?? new Error('Could not open the document.'); return data.signedUrl; }); } catch (e) { setMsg({ tone: 'error', text: friendlyError(e as { message?: string }) }); } }
   const decide = (c: any, decision: string, title: string, confirm: string, destructive = false) => ask({ title: `${title}: ${c.display_name}`, confirm, destructive, run: (reason) => supabase.rpc('admin_review_company', { p_company: c.company_id, p_decision: decision, p_reason: reason }) });
   return <><Chips label="Status" options={['pending', 'approved', 'rejected', 'draft', 'suspended'].map((s) => ({ id: s, label: labelize(s) }))} selected={[status]} onToggle={setStatus} />
     <StateView loading={q.loading} error={q.error} onRetry={q.reload} empty={(q.data ?? []).length === 0} emptyTitle="Queue is empty">{(q.data ?? []).map((c) => <Card key={c.company_id} style={{ gap: 8 }}>

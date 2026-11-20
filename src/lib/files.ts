@@ -1,5 +1,6 @@
 import * as Crypto from 'expo-crypto';
 import * as DocumentPicker from 'expo-document-picker';
+import { Linking, Platform } from 'react-native';
 import { supabase } from './supabase';
 
 export const RESUME_TYPES = {
@@ -42,4 +43,21 @@ export async function resumeLink(path: string): Promise<string> {
   const { data, error } = await supabase.storage.from('resumes').createSignedUrl(path, 60);
   if (error || !data) throw error ?? new Error('Could not create a download link.');
   return data.signedUrl;
+}
+
+/**
+ * Opens a URL that is only known after an async step (e.g. a freshly signed download link).
+ * On web, browsers block window.open() that happens after an await, so a blank tab is opened synchronously inside
+ * the click handler and pointed at the URL when it is ready. On native, the system handler opens it.
+ */
+export async function openWhenReady(getUrl: () => Promise<string>): Promise<void> {
+  if (Platform.OS === 'web' && typeof window !== 'undefined') {
+    const win = window.open('', '_blank');
+    try {
+      const url = await getUrl();
+      if (win) { win.opener = null; win.location.href = url; } else window.location.assign(url);
+    } catch (e) { win?.close(); throw e; }
+    return;
+  }
+  await Linking.openURL(await getUrl());
 }

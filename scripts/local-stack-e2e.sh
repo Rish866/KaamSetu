@@ -16,6 +16,8 @@ LIVE_ADMIN_PASSWORD="Qa-$(openssl rand -hex 12)-A1"; export LIVE_ADMIN_PASSWORD;
 # Test administrator: created through the Auth admin API, role granted the way the owner would (never via sign-up).
 uid=$(curl -sSf -X POST "$API_URL/auth/v1/admin/users" -H "apikey: $SERVICE_ROLE_KEY" -H "Authorization: Bearer $SERVICE_ROLE_KEY" -H 'Content-Type: application/json' \
   -d "{\"email\":\"$LIVE_ADMIN_EMAIL\",\"password\":\"$LIVE_ADMIN_PASSWORD\",\"email_confirm\":true,\"user_metadata\":{\"display_name\":\"QA Admin\",\"account_kind\":\"candidate\"}}" | jq -r .id)
+# Diagnostic only: what the local Auth server says about a phone sign-up (no secrets printed).
+curl -s -X POST "$API_URL/auth/v1/signup" -H "apikey: $LIVE_SUPABASE_ANON_KEY" -H 'Content-Type: application/json' -d '{"phone":"+919000000001","password":"Diagnostic-Pass-1"}' | jq -c '{code, error_code, msg, user: (.user.id != null)}' || true
 psql "$DB_URL" -v ON_ERROR_STOP=1 -c "insert into private.app_roles (user_id, role) values ('$uid', 'admin')"
 EXPO_PUBLIC_SUPABASE_URL="$API_URL" EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY="$LIVE_SUPABASE_ANON_KEY" npm run build:web
 npx expo serve --port 4173 > .cache-expo-serve.log 2>&1 &
