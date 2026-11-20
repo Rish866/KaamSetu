@@ -6,6 +6,9 @@ set -euo pipefail
 sed -i -e 's|^site_url = .*|site_url = "http://localhost:4173"|' \
        -e 's|^additional_redirect_urls = \[|additional_redirect_urls = [\n  "http://localhost:4173/reset-password",|' \
        -e 's|^sign_in_sign_ups = .*|sign_in_sign_ups = 1000|' -e 's|^email_sent = .*|email_sent = 1000|' supabase/config.toml
+# Local Auth refuses phone sign-ups without an SMS provider even when confirmations are off. A dummy provider is set
+# (no SMS is ever sent because confirmations are off). Production behaviour must be verified separately.
+printf '\n[auth.sms.twilio]\nenabled = true\naccount_sid = "ACtest"\nmessage_service_sid = "MGtest"\nauth_token = "local-test-only"\n' >> supabase/config.toml
 supabase start -x realtime,imgproxy,postgres-meta,studio,edge-runtime,logflare,vector,supavisor
 supabase status -o env | grep -E '^[A-Z_]+=' > .cache-local-stack.env
 set -a; . ./.cache-local-stack.env; set +a

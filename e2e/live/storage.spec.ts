@@ -65,8 +65,8 @@ test('after a (simulated) clean scan: owner gets a working 60-second link; other
   await owner.reload();
   const popup = owner.context().waitForEvent('page');
   await btn(owner, 'Download').click();
-  const opened = await popup; await opened.waitForLoadState().catch(() => undefined);
-  expect(opened.url()).toContain('/storage/v1/object/sign/resumes/');
+  const opened = await popup;
+  await opened.waitForURL(/\/storage\/v1\/object\/sign\/resumes\//, { timeout: 20_000 });
 });
 
 test('signed URLs stop working after they expire', async () => {

@@ -21,6 +21,7 @@ supabase db start --workdir "$W"
 psql "$DB" -v ON_ERROR_STOP=1 -f scripts/rehearsal/v130-fixtures.sql
 # Production-only environment differences (restricted default privileges, Supabase-managed event trigger), as superuser.
 psql "${DB/postgres:postgres@/supabase_admin:postgres@}" -v ON_ERROR_STOP=1 -f scripts/rehearsal/prod-environment.sql
+psql "$DB" -v ON_ERROR_STOP=1 -f scripts/rehearsal/prod-event-trigger.sql
 cp "${pending[@]}" "$W/supabase/migrations/"
 supabase migration up --workdir "$W"
 supabase migration list --workdir "$W"
