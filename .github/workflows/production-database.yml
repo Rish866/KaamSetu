@@ -134,12 +134,24 @@ jobs:
           echo "BACKUP_STAMP=$stamp" >> "$GITHUB_ENV"
 
       - uses: actions/upload-artifact@v4
+        id: backup_upload
         if: inputs.action == 'backup' || inputs.action == 'apply'
         with:
           name: production-backup-${{ env.BACKUP_STAMP }}
           path: backup/
           retention-days: 30
           if-no-files-found: error
+
+      - name: Verify the backup artifact exists before anything is applied
+        if: inputs.action == 'backup' || inputs.action == 'apply'
+        env:
+          ID: ${{ steps.backup_upload.outputs.artifact-id }}
+          DIGEST: ${{ steps.backup_upload.outputs.artifact-digest }}
+          URL: ${{ steps.backup_upload.outputs.artifact-url }}
+        run: |
+          [ -n "$ID" ] || { echo "::error::Backup artifact was not created"; exit 1; }
+          for f in backup/*-schema.sql.gpg backup/*-data.sql.gpg backup/*-roles.sql.gpg; do [ -s "$f" ] || { echo "::error::Missing or empty $f"; exit 1; }; done
+          echo "Backup artifact $ID ($URL) digest $DIGEST"
 
       - name: Dry run
         if: inputs.action == 'dry-run' || inputs.action == 'apply'
