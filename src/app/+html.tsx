@@ -2,13 +2,18 @@ import { ScrollViewStyleReset, useServerDocumentContext } from 'expo-router/html
 import type { PropsWithChildren } from 'react';
 
 // Static HTML shell for the web build. Security and SEO metadata live here.
+// connect-src is limited to the Supabase project this build is configured for (read at build time).
+const supabaseOrigin = (() => {
+  try { return new URL(process.env.EXPO_PUBLIC_SUPABASE_URL ?? '').origin; } catch { return 'https://*.supabase.co'; }
+})();
+const wsOrigin = supabaseOrigin.replace(/^http/, 'ws');
 const csp = [
   "default-src 'self'",
   "script-src 'self' 'unsafe-inline'",
   "style-src 'self' 'unsafe-inline'",
-  "img-src 'self' data: blob: https://*.supabase.co",
+  `img-src 'self' data: blob: ${supabaseOrigin}`,
   "font-src 'self' data:",
-  "connect-src 'self' https://*.supabase.co wss://*.supabase.co",
+  `connect-src 'self' ${supabaseOrigin} ${wsOrigin}`,
   "object-src 'none'",
   "base-uri 'self'",
   "form-action 'self'",

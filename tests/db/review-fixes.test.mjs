@@ -2,7 +2,7 @@
 import test, { before } from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { createDb, failure } from './harness.mjs';
+import { createDb, failure, REAL } from './harness.mjs';
 import { world, makeCompany, makeJob, makeCandidate } from './fixtures.mjs';
 
 let api, admin, co, job;
@@ -16,7 +16,7 @@ async function uploadResume(c, name = 'cv.pdf', size = 1200, sha = null) {
 }
 before(async () => { ({ api, admin } = await world()); co = await makeCompany(api, admin, 'Fix Co'); job = await makeJob(api, admin, co); });
 
-test('upgrade path: v1.3.0 production state migrates cleanly and keeps data', async () => {
+test('upgrade path: v1.3.0 production state migrates cleanly and keeps data', { skip: REAL && 'real Supabase: rehearsed by the CI supabase-db job (scripts/rehearse-upgrade.sh)' }, async () => {
   const old = await createDb({ until: '202611190001' });
   const emp = await old.signUp('employer', 'Legacy Employer'); const cand = await old.signUp('candidate', 'Legacy Candidate');
   // v1.3.0 behaviour: company created directly as pending, candidate profile upserted by the client, a consent row.
@@ -33,7 +33,7 @@ test('upgrade path: v1.3.0 production state migrates cleanly and keeps data', as
   assert.equal((await old.as(null, async (s) => (await s('select public.schema_version() v')).rows[0].v)), '202611200004');
 });
 
-test('migrations are not re-runnable by accident: a second apply of 0004 fails loudly rather than silently', async () => {
+test('migrations are not re-runnable by accident: a second apply of 0004 fails loudly rather than silently', { skip: REAL && 'would mutate the shared real database' }, async () => {
   // Supabase records applied versions and never re-runs them; this documents that 0004 is not idempotent by design.
   const fresh = await createDb();
   const err = await failure(fresh.db.exec((await import('node:fs')).readFileSync(new URL('../../supabase/migrations/202611200004_review_fixes.sql', import.meta.url), 'utf8')));
