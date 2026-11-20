@@ -1,3 +1,4 @@
+import { router } from 'expo-router';
 import React, { useState } from 'react';
 import { Linking, Platform, Share, StyleSheet, Text, View } from 'react-native';
 import { AppShell } from './AppShell';
@@ -56,7 +57,8 @@ export function SettingsView({ role }: { role: 'Candidate' | 'Employer' }) {
     } else await Share.share({ message: text, title: 'My KaamSetu data' });
     ok('Your data export was generated.'); await requests.reload();
   }
-  async function globalSignOut() { await supabase.auth.signOut({ scope: 'global' }); await signOut(); }
+  async function localSignOut() { await signOut(); router.replace('/login'); }
+  async function globalSignOut() { await supabase.auth.signOut({ scope: 'global' }); await signOut(); router.replace('/login'); }
   const openDeletion = (requests.data ?? []).find((r) => r.kind === 'deletion' && r.status === 'requested');
 
   return <AppShell role={role} title="Settings" subtitle="Your privacy, consents and security">
@@ -78,7 +80,7 @@ export function SettingsView({ role }: { role: 'Candidate' | 'Employer' }) {
       <PrimaryButton label="Change password" icon="key-outline" onPress={changePassword} />
       <Field label="Change email address" value={email} onChangeText={setEmail} autoCapitalize="none" keyboardType="email-address" hint="We email a confirmation link to both addresses." /><PrimaryButton label="Send confirmation link" variant="secondary" onPress={changeEmail} />
       <Banner tone="warn">Accounts that use only a mobile number cannot recover a forgotten password until SMS delivery is switched on. Add an email address to your account so you can always reset your password.</Banner>
-      <Row><PrimaryButton label="Sign out of this device" variant="secondary" onPress={signOut} /><PrimaryButton label="Sign out of all devices" variant="secondary" onPress={() => setConfirmAll(true)} /></Row>
+      <Row><PrimaryButton label="Sign out of this device" variant="secondary" onPress={localSignOut} /><PrimaryButton label="Sign out of all devices" variant="secondary" onPress={() => setConfirmAll(true)} /></Row>
     </Card>
     <SectionHead title="Your data" />
     <Card style={{ gap: 12 }}>

@@ -77,6 +77,7 @@ test('logout from this device ends the session', async ({ page }) => {
   await signIn(page, 'candidate', { email }); await expectPortal(page, 'candidate');
   await page.goto(`${env.base}/candidate/settings`);
   await btn(page, 'Sign out of this device').click();
+  await expect(page).toHaveURL(/\/login/, { timeout: 20_000 });
   await page.goto(`${env.base}/candidate`);
   await expect(page).toHaveURL(/\/login/, { timeout: 20_000 });
 });
