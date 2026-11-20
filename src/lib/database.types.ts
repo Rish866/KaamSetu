@@ -807,6 +807,8 @@ export type Database = {
       admin_set_account_status: { Args: Record<string, unknown>; Returns: unknown };
       /** (p_weights jsonb, p_reason text) => integer */
       admin_set_matching_weights: { Args: Record<string, unknown>; Returns: unknown };
+      /** (p_enabled boolean, p_reason text) => void */
+      admin_set_resume_uploads: { Args: Record<string, unknown>; Returns: unknown };
       /** (p_job uuid, p_note text DEFAULT NULL::text) => uuid */
       apply_to_job: { Args: Record<string, unknown>; Returns: unknown };
       /** (p_interview uuid, p_reason text DEFAULT NULL::text) => void */
@@ -861,6 +863,8 @@ export type Database = {
       my_membership: { Args: Record<string, unknown>; Returns: unknown };
       /** () => jsonb */
       my_profile_completion: { Args: Record<string, unknown>; Returns: unknown };
+      /** () => jsonb */
+      platform_flags: { Args: Record<string, unknown>; Returns: unknown };
       /** (p_application uuid, p_at timestamp with time zone, p_mode text, p_details text DEFAULT NULL::text) => uuid */
       propose_interview: { Args: Record<string, unknown>; Returns: unknown };
       /** (p_path text, p_name text, p_mime text, p_size integer, p_sha256 text) => uuid */

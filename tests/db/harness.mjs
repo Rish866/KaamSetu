@@ -13,6 +13,8 @@ import pg from 'pg';
 
 pg.types.setTypeParser(20, (v) => Number(v)); // int8 -> number, as PGlite does
 export const REAL = Boolean(process.env.KAAMSETU_PG_URL);
+// Identities must be unique across every Api instance (and, on a shared real database, across test processes).
+let identitySeq = REAL ? Math.floor(Math.random() * 80_000_000) : 0;
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 
@@ -107,7 +109,7 @@ export class Api {
 
   /** Create an auth user (the signup trigger builds profile + candidate row). */
   async signUp(kind, name, extra = {}) {
-    const i = ++this.n;
+    const i = ++identitySeq; this.n += 1;
     const email = extra.email ?? `${name.toLowerCase().replace(/\W+/g, '')}${i}@example.test`;
     const phone = extra.phone ?? `+9198${String(10000000 + i)}`;
     const confirmed = extra.confirmed ?? true;
