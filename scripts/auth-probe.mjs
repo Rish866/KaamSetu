@@ -33,15 +33,28 @@ try {
   report.checks.duplicate_phone = await auth('signup', { phone, password: pw, data: meta }).then((r) => ({ status: r.status, code: r.code, session: r.session }));
   report.checks.wrong_password = await auth('token?grant_type=password', { email, password: `${pw}x` }).then((r) => ({ status: r.status, code: r.code }));
 } finally {
-  const db = new pg.Client({ connectionString: dbUrl, ssl: { rejectUnauthorized: false } }); await db.connect();
+  // Delete through the Admin API first so a database connection problem can never leave QA accounts behind.
+  // Also sweeps accounts left by earlier probe runs: only the probe's own address and number patterns match.
+  const admin = { apikey: anon, Authorization: `Bearer ${service}` };
+  const cs = dbUrl.replace(/([?&])sslmode=[^&]*&?/, '$1').replace(/[?&]$/, '');
+  const db = new pg.Client({ connectionString: cs, ssl: { rejectUnauthorized: false } });
+  let leftovers = [];
+  try {
+    await db.connect();
+    leftovers = (await db.query("select id::text from auth.users where email like 'qa+probe-%@getkaamsetu.in' or phone like '911000%'")).rows.map((r) => r.id);
+  } catch (e) { report.db_error = e.code ?? e.message; }
   report.cleanup = [];
-  for (const id of [...new Set(created)]) {
-    const del = await fetch(`${url}/auth/v1/admin/users/${id}`, { method: 'DELETE', headers: { apikey: anon, Authorization: `Bearer ${service}` } });
-    const gone = await fetch(`${url}/auth/v1/admin/users/${id}`, { headers: { apikey: anon, Authorization: `Bearer ${service}` } });
-    const rows = (await db.query('select (select count(*) from auth.users where id=$1)::int u, (select count(*) from public.profiles where id=$1)::int p', [id])).rows[0];
-    report.cleanup.push({ delete_status: del.status, lookup_after: gone.status, auth_rows: rows.u, profile_rows: rows.p });
+  for (const id of [...new Set([...created, ...leftovers])]) {
+    const del = await fetch(`${url}/auth/v1/admin/users/${id}`, { method: 'DELETE', headers: admin });
+    const gone = await fetch(`${url}/auth/v1/admin/users/${id}`, { headers: admin });
+    report.cleanup.push({ from_this_run: created.includes(id), delete_status: del.status, lookup_after: gone.status });
   }
-  await db.end();
+  try {
+    const ids = report.cleanup.length ? [...new Set([...created, ...leftovers])] : [];
+    const rows = (await db.query('select (select count(*) from auth.users where id = any($1::uuid[]))::int u, (select count(*) from public.profiles where id = any($1::uuid[]))::int p, (select count(*) from auth.users where email like \'qa+probe-%@getkaamsetu.in\' or phone like \'911000%\')::int remaining', [ids])).rows[0];
+    report.rows_after = rows;
+  } catch (e) { report.db_error = report.db_error ?? (e.code ?? e.message); }
+  await db.end().catch(() => {});
 }
 const c = report.checks;
 report.result = {
@@ -49,7 +62,7 @@ report.result = {
   phone_signup_works: c.phone_signup?.status === 200 && c.phone_signup.session && c.phone_signin?.session,
   duplicates_refused: c.duplicate_email?.status >= 400 && c.duplicate_phone?.status >= 400 && !c.duplicate_email.session && !c.duplicate_phone.session,
   wrong_password_refused: c.wrong_password?.status === 400,
-  cleaned_up: report.cleanup.length === created.length && report.cleanup.every((x) => x.auth_rows === 0 && x.profile_rows === 0),
+  cleaned_up: report.cleanup.every((x) => x.lookup_after === 404) && report.rows_after?.u === 0 && report.rows_after?.p === 0 && report.rows_after?.remaining === 0,
 };
 console.log(JSON.stringify(report, null, 2));
 process.exit(report.result.cleaned_up ? 0 : 1);
