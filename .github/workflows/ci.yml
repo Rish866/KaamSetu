@@ -53,7 +53,7 @@ jobs:
       - run: npm ci
       - uses: supabase/setup-cli@v1
         with:
-          version: latest
+          version: 3.2.0
       - name: Upgrade rehearsal (v1.3.0-shaped data, then pending migrations)
         run: bash scripts/rehearse-upgrade.sh
       - name: Fresh database with all migrations
@@ -86,7 +86,7 @@ jobs:
       - run: npm ci
       - uses: supabase/setup-cli@v1
         with:
-          version: latest
+          version: 3.2.0
       - run: npx playwright install --with-deps chromium
       - name: Local stack + local production build + live specs
         run: bash scripts/local-stack-e2e.sh
