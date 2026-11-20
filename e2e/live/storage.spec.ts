@@ -19,7 +19,10 @@ async function asUser(uid: string, sql: string, p: unknown[] = []) {
     await c.query(`select set_config('request.jwt.claim.sub', $1, false), set_config('request.jwt.claims', json_build_object('sub', $1, 'role', 'authenticated')::text, false)`, [uid]);
     await c.query('set role authenticated');
     return (await c.query(sql, p)).rows;
-  } finally { await c.query('reset role').catch(() => undefined); c.release(); }
+  } finally {
+    await c.query(`reset role; select set_config('request.jwt.claim.sub', '', false), set_config('request.jwt.claims', '', false)`).catch(() => undefined);
+    c.release();
+  }
 }
 
 let owner: Page, other: Page, employer: Page, ownerToken = '', otherToken = '', employerToken = '', ownerId = '', employerId = '', path = '', resumeId = '';

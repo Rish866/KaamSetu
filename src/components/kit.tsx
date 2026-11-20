@@ -22,7 +22,9 @@ export function useLoad<T>(loader: () => Promise<T>, deps: unknown[] = []) {
   }, [key]);
   const reload = useCallback(async () => { setReloading(true); await load(); if (alive.current) setReloading(false); }, [load]);
   useEffect(() => { alive.current = true; void load(); return () => { alive.current = false; }; }, [load]);
-  return { data, error, loading: settled !== key || reloading, reload, setData };
+  // `loading` is true only for the first load of a given key. Reloads keep the current content mounted (so forms,
+  // search boxes and success messages inside it survive an action) and are reported as `refreshing`.
+  return { data, error, loading: settled !== key, refreshing: reloading, reload, setData };
 }
 
 /** Throws Supabase errors so useLoad can show them; returns data otherwise. */
