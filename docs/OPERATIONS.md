@@ -24,6 +24,16 @@ Migrations are never edited or rolled back in place. If a migration fails or mis
 * **Data damage:** restore from the encrypted backup artifact of that run: `gpg --decrypt <file>.sql.gpg > file.sql`, then restore into a **new** Supabase project (`psql "$NEW_DB_URL" -f roles.sql -f schema.sql -f data.sql`), verify counts against `scripts/preflight.sql` output from the run log, and repoint the app (`EXPO_PUBLIC_SUPABASE_URL`, rebuild). Paid-plan PITR is the faster alternative.
 * **App/DB mismatch:** the v1.4.0 app shows "KaamSetu is being updated" when `schema_version()` is missing or older than it needs, instead of failing screens.
 
+## Deleting users
+Never delete users from the Supabase dashboard (Authentication → Users → Delete). The delete cascades into immutable consent and
+application history and is refused by design (test: `review-fixes` "hard-deleting an auth user…"). Use the in-app deletion
+request → Admin → Privacy → Process deletion; the privacy worker then soft-deletes the Auth identity (frees email/phone) and purges files.
+
+## Production environment facts (read-only checks, Actions run 44807025417)
+* Postgres 17.12. Extensions: pg_stat_statements, pgcrypto, plpgsql, supabase_vault, uuid-ossp (pg_cron is created by migration 0003).
+* Supabase restricted default privileges: API roles get no table privileges unless granted; `service_role` has none on public tables.
+* Supabase-managed event trigger `ensure_rls` → `public.rls_auto_enable()` (owned by postgres) enables RLS on every new public table. Migrations must never revoke its EXECUTE.
+
 ## 2. Scheduled jobs
 
 | Job | Schedule | How | Status |

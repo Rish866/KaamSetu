@@ -1,67 +1,80 @@
-# Feature traceability (as of 2026-11-19, branch `feature/product-screens`, PR #3)
+# Feature traceability and evidence
 
-CI evidence: run [44622328465](https://github.com/Rish866/KaamSetu/actions/runs/44622328465) on PR head `af9804e` (tested as merge commit `704da14` onto `main` `a14a65b`), 2026-11-19 21:47–21:49 UTC: unit 22/22, database 80/80, Deno check, secret scan, CI web build, browser 33 passed / 4 skipped. "CI tested" below means covered by that run; it is still **unmerged and undeployed**.
+Updated 2026-11-20. Branch `feature/product-screens` (PR #3), **not merged, not deployed**.
+Production (website and Supabase `zrexqtzhdkkupyxmfqxd`) still runs v1.3.0 with migrations up to `202611190001`.
 
-Status vocabulary, in order: **Written** → **Locally tested** → **CI tested** → **Merged** → **Deployed** → **Production tested** → **Store published**. **Externally blocked** means it cannot progress without an owner action or third-party account.
+## Evidence sources (all recorded, none assumed)
 
-Facts that apply to every row below:
-* PR #3 is **not merged**. Nothing in it is **deployed**. Production runs v1.3.0 (verified 2026-11-19T21:27:32Z with `scripts/verify-production.mjs`: demo strings present in the live bundle, `schema_version()` missing).
-* "DB test" means `tests/db/*` on **PGlite** (PostgreSQL 18 in-process) with an emulation of Supabase roles, `auth.uid()`, `auth.users` uniqueness and storage tables. It is a **database simulation**, not Supabase. GoTrue, the Storage HTTP API, signed URLs, Edge Functions and email are **not** exercised by it.
-* "Local e2e" means Playwright against a **local production build** whose Supabase URL is a placeholder, so only screens that need no backend are covered.
-* "Live" verification has **not** happened for any v1.4.0 feature. The real-UI journey (`e2e/live/journey.spec.ts`) is **written, not executed**.
+| ID | What | Where | Result |
+|---|---|---|---|
+| CI | PR CI on head `b35f33c` (merged with `main` a14a65b as `3e3d363`), 2026-11-20 20:36–20:39 UTC | [run 44812869536](https://github.com/Rish866/KaamSetu/actions/runs/44812869536) | all 6 jobs green |
+| PG | Database tests on in-process PGlite (emulated Supabase roles/auth/storage) | CI job "Lint, types, unit, database and RLS tests" | 83/83 pass; unit 22/22 |
+| SB | **Same database tests on a real local Supabase Postgres 17.12 image** (`supabase db start`, reset per file) | CI job "Migrations, upgrade rehearsal and DB tests on real Supabase Postgres" | 81 pass, 2 skipped (PGlite-only: re-run detection, PGlite upgrade path), 0 fail |
+| RH | **Upgrade rehearsal** on real Supabase Postgres: base = the 4 migrations applied in production, v1.3.0-shaped data written with v1.3.0 privileges, production environment emulated (restricted default privileges, `rls_auto_enable` event trigger owned by postgres, RLS on private tables), then the 5 pending migrations via `supabase migration up`; data assertions, catalog checks, Auth/Storage-role DDL probes | same CI job, `scripts/rehearse-upgrade.sh` | passed |
+| UI | **Real UI tests on a local Supabase stack** (GoTrue, PostgREST, Storage, Mailpit) against a local production web build: `e2e/live/journey.spec.ts` (23 steps), `auth.spec.ts` (11), `storage.spec.ts` (6) | CI job "Real UI journeys on a local Supabase stack" | 31/31 pass |
+| WEB | Local production build + Playwright: route guards, honesty checks, axe WCAG A/AA on public pages, 3 viewports, console/CSP, hung backend, no `[param]` routes | CI job "Web production build…" | 36 pass, 4 skipped (store-asset generators) |
+| DRY | `supabase db push --dry-run` against **production** on the PR ref | [run 44813627572](https://github.com/Rish866/KaamSetu/actions/runs/44813627572) (head `b35f33c`) | would push 202611200001–0005 only; pre-flight blockers: 0 rows |
+| DRIFT | Read-only schema diff: production vs. the 4 migrations it records as applied | [run 44807025417](https://github.com/Rish866/KaamSetu/actions/runs/44807025417) | 0 structural drift; 5 known differences (resolved by 0005); 116 privilege lines from Supabase's restricted defaults; 1 Supabase-managed function |
+| BKP | Encrypted production backup (owner-run) | [run 44748509470](https://github.com/Rish866/KaamSetu/actions/runs/44748509470) | artifact created |
+| LIVE | Read-only probe of the deployed site | `scripts/verify-production.mjs`, last run 2026-11-19 21:27 UTC | site = v1.3.0 (demo strings present); new schema absent |
 
-M1–M4 = `supabase/migrations/202611200001…0004`. File paths are relative to the repo root.
+"Production tested" is **No** for every v1.4.0 feature below: nothing from PR #3 is deployed.
 
-| Feature | Code location | Database/RLS | Automated test | Live verification | Actual status |
-|---|---|---|---|---|---|
-| Email/password + mobile/password sign-up and login (v1.3.0) | `src/app/login.tsx`, `src/state/AuthContext.tsx` | `202611190001` (applied in prod), `handle_new_user` redefined in M1/M4 | DB: upgrade-path test keeps `current_user_access` working; local e2e: weak-password rejection, admin sign-up disabled | v1.3.0 login was tested by the owner earlier; v1.4.0 changes not verified | CI tested. Prod: v1.3.0 only |
-| Duplicate email/phone prevention | GoTrue + `profiles_email_unique` / `profiles_phone_unique` | `202611190001`, harness mirrors `auth.users` unique keys | DB: deletion test proves re-registration fails before scrub, succeeds after | Not verified on v1.4.0 | CI tested (simulated GoTrue constraint) |
-| Neutral auth messages (no account enumeration) | `login.tsx` `authMessage` and sign-up branch | — | None automated (requires GoTrue) | Not verified | Written |
-| Password reset (email) | `login.tsx` `requestPasswordReset`, `reset-password.tsx` | Supabase Auth | None automated | Not verified; depends on Supabase mail (default mailer is rate-limited) | Written; **externally blocked** on SMTP for reliable delivery |
-| Password change (re-checks current password) | `src/components/SettingsView.tsx` | Supabase Auth; `sync_auth_user` trigger records security notification (M4) | DB: password-change notification + "notification failure never breaks auth" | Not verified | Written (UI) / CI tested (trigger) |
-| Logout / logout all devices | `SettingsView.tsx` (`signOut({scope:'global'})`) | Supabase Auth | None automated | Not verified | Written |
-| Session expiry / refresh / rate limits | `supabase/config.toml` | Supabase Auth (some settings Pro-plan only) | None | Not verified; config not pushed | Written; **externally blocked** (needs `config push` with owner token) |
-| Suspended / deleted accounts blocked | `private.require_user` (M1), storage insert policies (M4) | M1, M4 | DB: workflow "suspended accounts…", review-fixes "suspended and deleted accounts cannot upload" | Not verified | CI tested |
-| Candidate route isolation (UI) | `src/app/_layout.tsx` `Stack.Protected` | RLS is the real control | Local e2e: anonymous redirect from 8 protected routes | Not verified | CI tested |
-| Admin cannot be self-registered | `login.tsx` (admin = sign-in only), `current_user_access` | `private.app_roles` not writable by API roles | DB: "selecting an employer account kind never grants admin"; local e2e: Create account disabled for admin | Not verified | CI tested |
-| Candidate profile (headline, locations ranked, modes, types, salary, notice, status, photo) | `src/app/candidate/profile.tsx` | `candidate_profiles` column grants (M1, M2) | DB: profile sections, completion; RLS isolation | Not verified | CI tested (DB); UI written, not exercised against a backend |
-| Education / experience / certifications / languages | `profile.tsx` `Section`, `LanguageAdd` | M2 tables + own-row RLS | DB: "profile sections are private, validated…" | Not verified | CI tested (DB); UI written, not exercised against a backend |
-| Profile completion % | `my_profile_completion` (M2) | M2 | DB: completion reaches 100% | Not verified | CI tested |
-| Discovery on/off with consent history | `profile.tsx`, `SettingsView.tsx` | `set_consent` (M1/M4), immutable `consent_records` | DB: discovery tests, consent history, withdrawal immediate | Not verified | CI tested |
-| Resume upload (PDF/DOCX, 5 MB, SHA-256 duplicate, private) | `src/lib/files.ts`, `profile.tsx` | `register_resume` (M1), bucket `resumes` private, insert policy (M4) | DB: path validation, size mismatch, duplicate checksum, quarantine on upload | Not verified (Storage API not exercised) | CI tested (DB); upload UI written |
-| Malware scanning | `supabase/functions/resume-processor`, `_shared/scanner.ts` (ClamAV REST adapter) | `resume_work_claim`, `resume_scan_report` (M4) | DB: unavailable/error/backoff/failed/clean/infected/leases; unit: adapter mapping with **fake** responses; structural inspection (exe-as-pdf, PDF JS/launch/embedded, DOCX macros/OLE/exe, zip bomb) | Not verified; no scanner exists | **Externally blocked**: no scanner deployed. Files stay quarantined (not downloadable by anyone) |
-| Resume parsing + review before applying | `resume-processor` (keyword-v1: DOCX via fflate, PDF via unpdf), `profile.tsx` `ExtractionReview` | `resume_parse_report`, `accept_resume_extraction` (consent-gated) | Unit: DOCX/PDF text extraction, skill matching; DB: skipped without consent, re-queued on consent, nothing applied without acceptance | Not verified | CI tested; in production it can only run after a file is scanned clean → **blocked by scanning** |
-| Replace / delete resume, purge | `profile.tsx`, `delete_resume`, worker purge task | M1, M4 | DB: soft delete unreadable, purge task queued | Not verified | CI tested (DB); purge needs worker deployment |
-| Signed download URLs (60 s) | `src/lib/files.ts` `resumeLink`, applicant page `openResume` | Storage select policies (M4) gate on clean + ownership/application | DB: who can SELECT the object (owner after clean, applied employer, not others, not after withdrawal) | **Expiry not verified** (needs Storage API) | CI tested (policy) / expiry unverified |
-| Employer resume access (consent: applying shares a clean resume) | `employer/job/[id].tsx` | `get_applicant_resume`, `employer_can_read_resume` (M4) | DB: "employer resume access follows the application consent rule and is logged" | Not verified | CI tested |
-| Job search, filters, sorting, saved jobs | `src/app/candidate/index.tsx`, `JobCard.tsx` | `job_feed`, `toggle_saved_job` (M2) | DB: feed search/filter/sort/saved | Not verified | CI tested (DB); UI written, not exercised against a backend |
-| Job detail + explainable match | `src/app/candidate/job/[id].tsx` | `job_detail`, `private.match_score` (M1/M2) | DB: matching suite (10 tests) | Not verified | CI tested |
-| Applications (apply, duplicate prevention, note, withdraw, timeline) | `candidate/job/[id].tsx`, `candidate/applications.tsx` | `apply_to_job`, `withdraw_application`, `my_applications` | DB: pipeline, withdraw terminal, timeline | Not verified | CI tested |
-| Invitations (send, dedupe, accept/decline, expiry) | `employer/discover.tsx`, `candidate/applications.tsx` | `invite_candidate` (quota M4), `respond_to_invitation`, expiry cron (M3) | DB: discovery/invitation test; quota | Cron branch not exercised (pg_cron absent in harness) | CI tested (RPC); expiry job unverified |
-| Interviews (propose, change, cancel, confirm, decline, reschedule) | `employer/job/[id].tsx`, `candidate/applications.tsx` | M1 interview RPCs | DB: pipeline test | Not verified | CI tested |
-| Employer onboarding (workspace) | `src/app/employer/index.tsx` | `create_employer_company` | DB: fixtures + upgrade path | Not verified | CI tested |
-| Company verification (GSTIN/CIN/LLPIN/domain, evidence, states, reason, resubmit) | `employer/index.tsx`, admin Companies tab | `submit_company_verification`, `admin_review_company` (M1/M4), bucket `company-evidence` | DB: lifecycle, evidence bucket privacy | Not verified | CI tested |
-| Company profile edits (identity fields locked after submission) | `employer/team.tsx` | `update_company_profile` (M4), column grants | DB: "company columns…" | Not verified | CI tested |
-| Recruiter team (invite, roles, deactivate, last owner) | `employer/team.tsx` | M1/M2/M4 RPCs, `guard_last_owner` | DB: team invitations need confirmed email; last-owner guard | Not verified. **Invitations cannot be accepted in production while email confirmation is off** | CI tested; acceptance **blocked on SMTP + confirmations** |
-| Job management (draft/edit/submit/pause/resume/close/reopen/duplicate/history, moderation holds) | `employer/jobs.tsx`, `post-job.tsx` | M1/M4 | DB: job lifecycle, moderation hold | Not verified | CI tested |
-| Applicant pipeline (stages, reasons, offer details, events) | `employer/job/[id].tsx` | `transition_application`, `application_events` immutable | DB: pipeline, rejection reason | Not verified | CI tested |
-| Contact disclosure (shortlist + consent, verified flags, logged) | `employer/job/[id].tsx` | `get_applicant_contact` (M4) | DB: contact tests, verified flags | Not verified | CI tested |
-| Candidate discovery (masked, filters, quotas, ranking) | `employer/discover.tsx` | `search_candidates` (M4) | DB: masked results, exact skill, quota, ranking | Not verified | CI tested |
-| Applicant export | — | — | — | — | **Not implemented by design** (privacy); documented |
-| Administrator console (dashboard, companies, jobs, reports, users, privacy, audit, system, roles, weights) | `src/app/admin.tsx` | `admin_*` RPCs with role checks, reasons required | DB: role-by-role authorisation, reasons, audit | Not verified; needs owner-authorised test admin | CI tested (DB); UI written, not exercised against a backend |
-| Abuse reports | `candidate/job/[id].tsx`, admin Reports | `report_job` (rate limit M4), `admin_resolve_report` | DB: reports + rate limit | Not verified | CI tested |
-| Matching engine v1 (35/25/20/15/5, hard filters, explanations, versioned, fairness, governed weights) | `private.match_score` and components (M1) | M1 | DB: 10 matching tests incl. source scan for protected attributes | Not verified | CI tested |
-| In-app notifications (centre, read/unread) | `src/components/NotificationsView.tsx`, `AppShell` badge | `notifications` RLS, `mark_notifications_read` | DB: own-only, mark read | Not verified | CI tested |
-| Notification preferences + unsubscribe | `SettingsView.tsx`, `supabase/functions/unsubscribe` (GET confirm / POST act) | `notification_preferences` (row created at sign-up, M4) | DB: token at sign-up, late opt-out; unit: unsubscribe headers only on optional | Function type-checked, not deployed | CI tested; function not deployed |
-| Email delivery (outbox, categories, leases, retries, permanent failure, admin visibility, templates, providers) | `supabase/functions/email-worker`, `_shared/email-templates.ts` | `private.email_outbox`, `outbox_claim`/`outbox_report` (M4) | DB: concurrent claims, retries to failed, stale lease, suppression; unit: templates, subject safety, Resend/Postmark request shape with **fake** fetch | No email has ever been delivered by v1.4.0 code | **Externally blocked**: no provider account, no verified domain |
-| Privacy: versioned consents, withdrawal | `SettingsView.tsx`, `src/content/legal.ts` (`NOTICE_VERSION 2026-11-20`) | `consent_records` append-only (UPDATE/DELETE/TRUNCATE blocked, M4) | DB: consent history, immutability | Not verified | CI tested; texts are **drafts pending legal review** |
-| Data export | `SettingsView.tsx` (JSON download/share) | `request_data_export` | DB: export contains only caller's data | Not verified | CI tested |
-| Account deletion | `SettingsView.tsx`, admin Privacy tab, `supabase/functions/privacy-worker` | `admin_process_deletion` (M4), `privacy_deletions_pending`, `privacy_mark_processed` | DB: anonymisation, sole-owner rules, identifiers freed only after scrub (**scrub simulated in SQL**) | Auth soft-delete via Admin API **unverified** | CI tested (SQL part); auth/storage scrub written, not run |
-| Retention jobs | `run_retention_jobs` (M4), pg_cron (M3) | M3/M4 | DB: deletes old read notifications | pg_cron scheduling not exercised | CI tested (function) |
-| RLS / grants / storage policies | all migrations | M1–M4 | DB: 16 RLS tests + 15 review-fix tests; `scripts/production-checks.sql` for prod | Prod catalog checks **not run** (no DB credentials) | CI tested; prod verification **blocked on secrets** |
-| Schema guard (maintenance screen if DB behind app) | `src/app/_layout.tsx` | `schema_version()` (M4) | DB: anon can call it | Not verified | CI tested |
-| Web security headers / CSP | `src/app/+html.tsx`, `public/_headers` | — | Local e2e: no console/CSP errors | Live site (v1.3.0) has neither title nor CSP (baseline). Whether Sites honours `_headers` is unknown | CI tested |
-| Accessibility | components + `kit.tsx` | — | Local e2e: axe WCAG A/AA on 5 public pages (color-contrast rule disabled) | Signed-in screens not audited | Partially tested |
-| Backups | `.github/workflows/production-database.yml` (`backup`, encrypted) | — | Workflow dispatched once: failed at "Missing repository secrets" (run 44619768915) | No backup taken | **Externally blocked** on secrets |
-| Website deployment | `.openai/hosting.json` | — | — | Deployed site is v1.3.0 | **Externally blocked**: Sites deploys from the owner's OpenAI workspace; no credential here |
-| Android / iPhone builds | `.github/workflows/release-builds.yml`, `eas.json` | — | Not run for v1.4.0 (runs on tag) | — | Written; signed builds **externally blocked** |
+## Defects found and fixed in this round (each with a regression test)
+
+| Defect | Found by | Fix | Regression test |
+|---|---|---|---|
+| Permission loops in 0001/0002/0004 would revoke PUBLIC EXECUTE on Supabase's `public.rls_auto_enable()` (owned by postgres in production), making every DDL by other roles (Auth/Storage upgrades) fail | DRIFT + RH | loops skip event-trigger functions | PG: `review-fixes` "event-trigger functions executable" (fails without the fix); RH: DDL as `supabase_storage_admin` and `supabase_auth_admin` |
+| Production gives `service_role` no table privileges; resume worker read `public.skills` directly | DRIFT | 0005: explicit `select (name, active)` on skills; all other service_role table privileges revoked everywhere | PG/SB: "service_role has least privilege" |
+| RLS on private tables and two helper definitions differed between production and migrations | DRIFT | 0005 enables RLS on private tables and re-states helpers | PG/SB same test |
+| CSP blocked `fetch(blob:)`, so **resume upload failed on web** | UI | `connect-src` adds `blob:`; limited to the configured project origin | UI journey step 3–4, storage spec |
+| Downloads opened after an `await` were blocked as popups | UI | `openWhenReady()` opens the tab synchronously | UI storage "owner gets a working 60-second link" |
+| Post-job chip groups overlapped the next label; location chips could not be tapped | UI | layout fix in `post-job.tsx` | UI journey steps 9–10 |
+| `[id]` dynamic routes exported as `[id].html`; deep links/reloads would break on a plain static host | UI | `/candidate/job?id=…`, `/employer/job?id=…` | WEB "no [param] routes"; UI journey reload check |
+| Employer could not reschedule an interview after the candidate asked | UI | button at interview stage | UI journey steps 16–17 |
+| Reloading data after an admin action unmounted the screen (search box and confirmations lost) | UI | `useLoad` keeps content mounted on reload | UI auth "suspended accounts", journey 21–22 |
+| Settings sign-out did not leave the protected screen | UI | navigate to /login | UI auth "logout from this device" |
+| Direct SQL delete of storage objects is refused by real Supabase Storage | SB | test accepts the stricter real behaviour | SB rls suite |
+
+## Feature table
+
+Columns: Implemented (code exists) · CI tested (which evidence) · Deployed · Production tested.
+
+| Feature | Code location | Database/RLS | CI evidence | Deployed | Production tested | Status / blocker |
+|---|---|---|---|---|---|---|
+| Email/password sign-up, login, session persistence | `src/app/login.tsx`, `src/state/AuthContext.tsx` | `handle_new_user` (M1/M4) | UI auth 1; PG/SB | No | No (v1.3.0 only) | CI tested on local GoTrue |
+| Mobile/password sign-up and login | same | same | UI auth 2 (local Auth needed a dummy SMS provider config) | No | No | **Unverified in production**: production phone sign-up depends on the project's SMS provider setting |
+| Duplicate email / phone refused, neutral message | `authMessage` | GoTrue unique keys | UI auth 3 | No | No | CI tested. Note: with email confirmation off, the message for an existing address differs from a successful sign-up (inherent to auto-confirm) |
+| Wrong password / unknown account same message | `authMessage` | — | UI auth 4 | No | No | CI tested |
+| Route isolation; admin door grants nothing | `_layout.tsx` guards, `continueToPortal` | RLS is the real control | UI auth 5; WEB anonymous redirects (10 routes) | No | No | CI tested |
+| Logout (device) / logout all devices (refresh token revoked) | `SettingsView.tsx` | GoTrue | UI auth 6–7 | No | No | CI tested. Access tokens already issued stay valid until expiry (≤1 h, GoTrue behaviour) |
+| Password reset by email | `login.tsx`, `reset-password.tsx` | GoTrue | UI auth 8 (email read from local Mailpit, link followed, new password used) | No | No | **Production blocked**: no custom SMTP; Supabase's built-in mailer is test-only |
+| Password change requires current password | `SettingsView.tsx` | GoTrue | UI auth 8–9 | No | No | CI tested |
+| Suspension / restoration | `admin.tsx` Users | `admin_set_account_status` | UI auth 10; PG/SB workflow | No | No | CI tested |
+| Rate limits / failed-login protection | `supabase/config.toml` | GoTrue | not tested (local run raises limits) | config not pushed | No | **Unverified** |
+| Candidate profile, sections, completion | `candidate/profile.tsx` | M1/M2 RLS | UI journey 2; PG/SB product | No | No | CI tested |
+| Resume upload (private, checksum, quarantine) | `lib/files.ts`, `profile.tsx` | `register_resume`, storage policies (M4) | UI journey 3–4, storage 1–2 | No | No | CI tested |
+| Signed URLs: owner-only after clean, 60 s, expiry, no public path | `openWhenReady`, `resumeLink` | storage SELECT policy (M4) | UI storage 3–4 (real Storage API, token exp−iat = 60 s, expired link refused) | No | No | CI tested (clean verdict **simulated** by the test) |
+| Employer resume access only after application; revoked on withdrawal | `employer/job.tsx` | `get_applicant_resume`, `employer_can_read_resume` | UI storage 5; PG/SB | No | No | CI tested |
+| Infected/failed files never downloadable | `resume_scan_report` | M4 | UI storage 6 (verdict simulated) | No | No | CI tested |
+| Malware scanning | `supabase/functions/resume-processor`, `_shared/scanner.ts` | M4 pipeline | adapter unit tests use **fake** HTTP; structural checks unit-tested | No | No | **Externally blocked**: no scanner service. All production uploads will stay quarantined |
+| Resume parsing + review | `resume-processor`, `ExtractionReview` | consent-gated | unit (DOCX/PDF text, skills); PG/SB | No | No | Blocked behind scanning |
+| Job search, filters, explainable match | `candidate/index.tsx`, `candidate/job.tsx` | `job_feed`, `job_detail`, `match_score` | UI journey 11–12 ("Matches 2 of 2 listed skills"); PG/SB matching 10 | No | No | CI tested |
+| Applications, timeline, withdrawal | `candidate/applications.tsx` | M1 RPCs | UI journey 12, 19; UI storage 5 (withdraw) | No | No | CI tested |
+| Invitations | `employer/discover.tsx` | `invite_candidate` | PG/SB only | No | No | CI tested at DB level; **no UI test** |
+| Interviews: propose, reschedule request, re-propose, confirm | `employer/job.tsx`, `candidate/applications.tsx` | M1 | UI journey 16–17 | No | No | CI tested |
+| Offer and status updates | same | `transition_application` | UI journey 18–19 (timeline + notifications) | No | No | CI tested |
+| Employer onboarding, verification evidence, admin approval with reason | `employer/index.tsx`, `admin.tsx` | M1/M4 | UI journey 5–8 (incl. reason required, audit event visible) | No | No | CI tested (domain identifier; document upload not exercised in UI test) |
+| Job management, moderation, close | `post-job.tsx`, `employer/jobs.tsx`, admin Jobs | M1/M4 holds | UI journey 9–10, 23; PG/SB | No | No | CI tested |
+| Applicant pipeline, contact disclosure after consent | `employer/job.tsx` | `get_applicant_contact` | UI journey 13–15 | No | No | CI tested |
+| Candidate discovery | `employer/discover.tsx` | `search_candidates` (quota) | PG/SB only | No | No | CI tested at DB level; **no UI test** |
+| Admin console (companies, jobs, users, privacy, audit) | `admin.tsx` | `admin_*` RPCs | UI journey 8, 10, 21–23; UI auth 10 | No | No | CI tested; reports, email-failure, roles and matching-weights tabs DB-tested only |
+| Notifications (in-app) | `NotificationsView.tsx` | M1/M4 | UI journey 19 | No | No | CI tested |
+| Email delivery | `functions/email-worker`, `_shared/email-templates.ts` | outbox leases (M4) | PG/SB outbox tests; unit templates/providers (fake HTTP) | No | No | **Externally blocked**: no provider, no verified domain |
+| Data export | `SettingsView.tsx` | `request_data_export` | UI journey 20 (file downloaded, own data only) | No | No | CI tested |
+| Account deletion | `SettingsView.tsx`, admin Privacy, `functions/privacy-worker` | `admin_process_deletion` (M4) | UI journey 21–23, auth clean-up; PG/SB | No | No | SQL part CI tested; **privacy-worker (Auth soft delete, file purge) never run** |
+| RLS / grants / storage policies | M1–M5 | — | PG 83, SB 81, RH, catalog checks (`scripts/production-checks.sql`) | No | No | CI tested; production catalog checks run after apply |
+| Backups | `production-database.yml` | — | BKP run 44748509470; apply job re-backs up and verifies the artifact first | — | — | Restore drill **not performed** |
+| Website | `src/app/**`, `.openai/hosting.json` | — | WEB, UI | **No** | No | Deploying to Sites needs the owner (no Sites credential here) |
+| Android / iOS | `release-builds.yml`, `eas.json` | — | not built for v1.4.0 | No | No | APK/Simulator after tag; signed store builds owner-blocked |
+| Legal | `src/content/legal.ts`, `docs/PRIVACY.md` | — | WEB: pages marked draft | — | — | Drafts; lawyer review required |

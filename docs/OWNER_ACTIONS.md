@@ -3,7 +3,7 @@
 One step at a time, in this order. Never paste a key or password into chat: enter it only on the website named.
 Status of each step is recorded in docs/AUDIT.md.
 
-## Step 1 (blocks everything that touches production)
+## Step 1 (done 2026-11-20: secrets added; status, backup and dry-run passed)
 Add three repository secrets: GitHub → Rish866/KaamSetu → Settings → Secrets and variables → Actions → **New repository secret**:
 * `SUPABASE_ACCESS_TOKEN`: create at supabase.com/dashboard/account/tokens (name it "KaamSetu GitHub Actions").
 * `SUPABASE_DB_PASSWORD`: the database password of project `zrexqtzhdkkupyxmfqxd` (Supabase → Project Settings → Database; reset it there if unknown).
