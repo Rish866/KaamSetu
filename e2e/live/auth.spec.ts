@@ -100,16 +100,16 @@ test('password reset email works end to end (local stack: read from Mailpit)', a
   await page.goto(link);
   await expect(page).toHaveURL(/\/reset-password/, { timeout: 20_000 });
   const next = `${password}X`;
-  await page.getByRole('textbox', { name: 'New password' }).fill(next);
-  await page.getByRole('textbox', { name: 'Confirm new password' }).fill(next);
+  await page.getByRole('textbox', { name: 'New password', exact: true }).fill(next);
+  await page.getByRole('textbox', { name: 'Confirm new password', exact: true }).fill(next);
   await btn(page, 'Update password').click();
   await expect(page.getByRole('alert')).toContainText('Your password has been updated');
   await signIn(page, 'candidate', { email }, next); await expectPortal(page, 'candidate');
   // Restore so later specs can sign in.
   await page.goto(`${env.base}/candidate/settings`);
-  await page.getByRole('textbox', { name: 'Current password' }).fill(next);
-  await page.getByRole('textbox', { name: 'New password' }).fill(password);
-  await page.getByRole('textbox', { name: 'Repeat new password' }).fill(password);
+  await page.getByRole('textbox', { name: 'Current password', exact: true }).fill(next);
+  await page.getByRole('textbox', { name: 'New password', exact: true }).fill(password);
+  await page.getByRole('textbox', { name: 'Repeat new password', exact: true }).fill(password);
   await btn(page, 'Change password').click();
   await expect(page.getByText(/Password changed/)).toBeVisible();
 });
@@ -117,9 +117,9 @@ test('password reset email works end to end (local stack: read from Mailpit)', a
 test('password change requires the current password', async ({ page }) => {
   await signIn(page, 'candidate', { email }); await expectPortal(page, 'candidate');
   await page.goto(`${env.base}/candidate/settings`);
-  await page.getByRole('textbox', { name: 'Current password' }).fill('Not-The-Password-1');
-  await page.getByRole('textbox', { name: 'New password' }).fill(`${password}Y`);
-  await page.getByRole('textbox', { name: 'Repeat new password' }).fill(`${password}Y`);
+  await page.getByRole('textbox', { name: 'Current password', exact: true }).fill('Not-The-Password-1');
+  await page.getByRole('textbox', { name: 'New password', exact: true }).fill(`${password}Y`);
+  await page.getByRole('textbox', { name: 'Repeat new password', exact: true }).fill(`${password}Y`);
   await btn(page, 'Change password').click();
   await expect(page.getByText('Your current password is incorrect.')).toBeVisible();
 });

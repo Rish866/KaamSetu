@@ -88,6 +88,6 @@ export async function uploadResume(p: Page, text = 'QA resume CRM Customer suppo
   const chooser = p.waitForEvent('filechooser');
   await btn(p, /^(Upload resume|Replace resume)$/).click();
   await (await chooser).setFiles({ name: 'qa-resume.pdf', mimeType: 'application/pdf', buffer: minimalPdf(text) });
-  try { await expect(p.getByText(/Resume uploaded|Quarantined|Security check: passed/).first()).toBeVisible({ timeout: 30_000 }); }
+  try { await expect(p.getByText('Resume uploaded. It stays private and is checked before use.')).toBeVisible({ timeout: 30_000 }); }
   catch { throw new Error(`Resume upload did not complete. Messages: ${await visibleMessages(p)}`); }
 }
