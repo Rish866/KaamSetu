@@ -35,7 +35,7 @@ try {
 } finally {
   // Delete through the Admin API first so a database connection problem can never leave QA accounts behind.
   // Also sweeps accounts left by earlier probe runs: only the probe's own address and number patterns match.
-  const admin = { apikey: anon, Authorization: `Bearer ${service}` };
+  const admin = { apikey: service, Authorization: `Bearer ${service}` };
   const cs = dbUrl.replace(/([?&])sslmode=[^&]*&?/, '$1').replace(/[?&]$/, '');
   const db = new pg.Client({ connectionString: cs, ssl: { rejectUnauthorized: false } });
   let leftovers = [];
