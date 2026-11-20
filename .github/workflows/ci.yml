@@ -57,7 +57,7 @@ jobs:
       - name: Upgrade rehearsal (v1.3.0-shaped data, then pending migrations)
         run: bash scripts/rehearse-upgrade.sh
       - name: Fresh database with all migrations
-        run: supabase db start && supabase migration list --local
+        run: supabase db start && supabase migration list
       - name: Catalog checks (same script as production)
         run: psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" -v ON_ERROR_STOP=1 -f scripts/production-checks.sql
       - name: Database test suite against real Supabase Postgres
@@ -66,10 +66,34 @@ jobs:
         run: |
           status=0
           for f in tests/db/*.test.mjs; do
-            supabase db reset --local >/dev/null
+            supabase db reset >/dev/null
             echo "::group::$f"; node --test --test-reporter=spec "$f" || status=1; echo "::endgroup::"
           done
           exit $status
+
+  e2e-local-stack:
+    name: Real UI journeys on a local Supabase stack (auth, storage, marketplace)
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      EXPO_NO_TELEMETRY: 1
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+      - run: npx playwright install --with-deps chromium
+      - name: Local stack + local production build + live specs
+        run: bash scripts/local-stack-e2e.sh
+      - name: Results summary
+        if: always()
+        run: |
+          [ -f test-results/live-results.json ] && jq -r '.suites[] | .title as $f | (.. | objects | select(has("specs")) | .specs[]? | "\($f) | \(.title) | \(.tests[0].results[-1].status // "not run")")' test-results/live-results.json | sort -u || echo "no results file"
 
   edge-functions:
     name: Edge Functions type check (Deno)

@@ -199,8 +199,10 @@ test('resume storage is private to the owner and paths are validated', async () 
   assert.equal((await api.as(e1.owner, (s) => s(`select * from storage.objects where bucket_id='resumes'`))).rows.length, 0, 'employers must not list resumes');
   assert.ok(await failure(api.as(B, (s) => s(`insert into storage.objects (bucket_id,name,owner_id) values ('resumes',$1,$2)`, [`${A.id}/evil.pdf`, B.id]))), 'cannot upload into another folder');
   assert.ok(await failure(api.as(B, (s) => s(`insert into storage.objects (bucket_id,name,owner_id) values ('resumes',$1,$2)`, [`${B.id}/script.exe`, B.id]))), 'only pdf/docx names');
-  const del = await api.as(B, async (s) => (await s(`delete from storage.objects where name=$1`, [`${A.id}/cv.pdf`])).affectedRows);
-  assert.equal(del, 0, 'cannot delete another user\'s object');
+  // PGlite: the delete matches no rows (no policy allows it). Real Supabase Storage additionally refuses any direct SQL delete.
+  let del = 0; const delErr = await failure(api.as(B, async (s) => { del = (await s(`delete from storage.objects where name=$1`, [`${A.id}/cv.pdf`])).affectedRows; }));
+  assert.ok(delErr ? /Direct deletion|permission denied/.test(delErr) : del === 0, `cannot delete another user's object (${delErr ?? del})`);
+  assert.equal((await api.q('select count(*)::int n from storage.objects where name=$1', [`${A.id}/cv.pdf`])).rows[0].n, 1, 'object still exists');
   assert.match(await failure(api.as(B, (s) => s(`select public.register_resume($1,'x.pdf','application/pdf',500,$2)`, [`${A.id}/cv.pdf`, 'c'.repeat(64)]))) ?? '', /Invalid resume path/);
   assert.match(await failure(api.as(B, (s) => s(`select public.register_resume($1,'x.pdf','application/pdf',999,$2)`, [`${B.id}/b.pdf`, 'c'.repeat(64)]))) ?? '', /size does not match/);
   assert.match(await failure(api.as(B, (s) => s(`select public.register_resume($1,'x.pdf','application/pdf',500,$2)`, [`${B.id}/../${A.id}/cv.pdf`, 'c'.repeat(64)]))) ?? '', /Invalid resume path/);

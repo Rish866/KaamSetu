@@ -20,8 +20,8 @@ echo "Pending migrations: ${pending[*]}"
 supabase db start --workdir "$W"
 psql "$DB" -v ON_ERROR_STOP=1 -f scripts/rehearsal/v130-fixtures.sql
 cp "${pending[@]}" "$W/supabase/migrations/"
-supabase migration up --local --workdir "$W"
-supabase migration list --local --workdir "$W"
+supabase migration up --workdir "$W"
+supabase migration list --workdir "$W"
 psql "$DB" -v ON_ERROR_STOP=1 -f scripts/rehearsal/v140-assertions.sql
 psql "$DB" -v ON_ERROR_STOP=1 -f scripts/production-checks.sql
 supabase stop --no-backup --workdir "$W"

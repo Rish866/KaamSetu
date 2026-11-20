@@ -40,7 +40,6 @@ inactivity_timeout = "336h"
 
 [auth.email]
 enabled = true
-enable_signup = true
 # OFF until a custom SMTP provider with a verified domain is configured (Supabase's built-in mailer is for testing only).
 # Consequence while off: email ownership is unverified, so team invitations (which require a confirmed email) cannot be accepted.
 # Turn ON in the same change that configures SMTP. See docs/OWNER_ACTIONS.md.
@@ -53,7 +52,6 @@ max_frequency = "1m"
 [auth.sms]
 # Phone + password sign-in stays enabled; no SMS is sent in the first launch (no OTP, no SMS recovery).
 enabled = true
-enable_signup = true
 enable_confirmations = false
 
 [functions.email-worker]
