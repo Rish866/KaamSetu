@@ -99,7 +99,8 @@ test('11-12. candidate searches, sees an explainable match and applies', async (
   await btn(c, 'Apply with my profile').click();
   await confirmDialog(c, 'Send application');
   await expect(c.getByText(/Application sent/)).toBeVisible();
-  await c.reload();
+  await c.reload(); // deep link /candidate/job?id=... must survive a reload on a static host
+  await expect(c).toHaveURL(/\/candidate\/job\?id=/);
   await expect(btn(c, 'Track application')).toBeVisible({ timeout: 20_000 });
 });
 

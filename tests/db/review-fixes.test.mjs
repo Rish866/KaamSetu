@@ -246,6 +246,6 @@ test('service_role has least privilege: no direct table access except reading th
 test('migrations leave Supabase-managed event-trigger functions executable by every role (DDL by Auth/Storage keeps working)', async () => {
   const { rows } = await api.q(`select p.oid::regprocedure::text sig, has_function_privilege('public', p.oid, 'execute') pub
     from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname = 'public' and p.prorettype = 'event_trigger'::regtype`);
-  assert.ok(rows.length >= 1, 'the emulated rls_auto_enable() exists');
+  if (!REAL) assert.ok(rows.length >= 1, 'the emulated rls_auto_enable() exists'); // real stack: covered by scripts/rehearse-upgrade.sh
   for (const r of rows) assert.equal(r.pub, true, `${r.sig} must keep PUBLIC EXECUTE`);
 });

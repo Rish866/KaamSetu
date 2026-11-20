@@ -63,10 +63,10 @@ test('after a (simulated) clean scan: owner gets a working 60-second link; other
   expect((await sign(path, employerToken)).status).toBeGreaterThanOrEqual(400);
   // The owner's own UI download button uses the same 60-second link.
   await owner.reload();
-  const popup = owner.context().waitForEvent('page');
+  const request = owner.context().waitForEvent('request', (r) => r.url().includes('/storage/v1/object/sign/resumes/') && r.method() === 'GET');
   await btn(owner, 'Download').click();
-  const opened = await popup;
-  await opened.waitForURL(/\/storage\/v1\/object\/sign\/resumes\//, { timeout: 20_000 });
+  const opened = await request; // the new tab requests the signed URL (Chromium then treats the PDF as a download)
+  expect(new URL(opened.url()).searchParams.get('token')).toBeTruthy();
 });
 
 test('signed URLs stop working after they expire', async () => {

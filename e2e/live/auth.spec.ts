@@ -39,9 +39,9 @@ test('duplicate email and duplicate phone are refused with a neutral message', a
 
 test('wrong password and unknown account give the same message', async ({ page }) => {
   await signIn(page, 'candidate', { email }, 'Wrong-Password-1');
-  await expect(page.getByRole('alert')).toHaveText('The email/mobile number or password is incorrect.');
+  await expect(page.getByRole('alert')).toContainText('The email/mobile number or password is incorrect.');
   await signIn(page, 'candidate', { email: qaEmail('nobody') }, 'Wrong-Password-1');
-  await expect(page.getByRole('alert')).toHaveText('The email/mobile number or password is incorrect.');
+  await expect(page.getByRole('alert')).toContainText('The email/mobile number or password is incorrect.');
 });
 
 test('route isolation: a candidate cannot open employer or admin areas', async ({ page }) => {

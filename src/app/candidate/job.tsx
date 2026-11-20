@@ -1,12 +1,12 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import React, { useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
-import { AppShell } from '../../../components/AppShell';
-import { Banner, Chips, ConfirmDialog, Field, Row, SectionHead, StateView, unwrap, useLoad } from '../../../components/kit';
-import { Card, Pill, PrimaryButton } from '../../../components/ui';
-import { formatExperience, formatLocation, formatSalaryRange, friendlyError, labelize } from '../../../lib/format';
-import { supabase } from '../../../lib/supabase';
-import { colors } from '../../../theme';
+import { AppShell } from '../../components/AppShell';
+import { Banner, Chips, ConfirmDialog, Field, Row, SectionHead, StateView, unwrap, useLoad } from '../../components/kit';
+import { Card, Pill, PrimaryButton } from '../../components/ui';
+import { formatExperience, formatLocation, formatSalaryRange, friendlyError, labelize } from '../../lib/format';
+import { supabase } from '../../lib/supabase';
+import { colors } from '../../theme';
 
 type Component = { score: number | null; weight: number; missing: boolean; explanation: string };
 type Detail = {

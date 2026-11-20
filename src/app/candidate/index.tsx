@@ -48,7 +48,7 @@ export default function CandidateJobs() {
     {notice && <Banner tone="error">{notice}</Banner>}
     <SectionHead title={applied.savedOnly ? 'Saved jobs' : 'Jobs for you'} sub={feed.data ? `${feed.data.length} job${feed.data.length === 1 ? '' : 's'} found` : undefined} />
     <StateView loading={feed.loading} error={feed.error} onRetry={feed.reload} empty={(feed.data ?? []).length === 0} emptyTitle="No jobs match yet" emptyText="Try fewer filters. New verified jobs appear here as soon as they are approved.">
-      <View style={{ gap: 14 }}>{(feed.data ?? []).map((job) => <JobCard key={job.job_id} job={job} onSave={() => toggleSave(job)} onOpen={() => router.push(`/candidate/job/${job.job_id}`)} />)}</View>
+      <View style={{ gap: 14 }}>{(feed.data ?? []).map((job) => <JobCard key={job.job_id} job={job} onSave={() => toggleSave(job)} onOpen={() => router.push({ pathname: '/candidate/job', params: { id: job.job_id } })} />)}</View>
     </StateView>
   </AppShell>;
 }

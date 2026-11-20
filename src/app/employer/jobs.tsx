@@ -40,7 +40,7 @@ export default function EmployerJobs() {
         {j.moderation_hold && <Banner tone="warn">{j.moderation_hold === 'admin' ? 'KaamSetu moderators have put this job on hold. Contact support to resolve it.' : 'This job was paused because your company is suspended.'}</Banner>}
         <Text style={styles.muted}>{j.applicants} applicant{j.applicants === 1 ? '' : 's'}{j.new_applicants ? ` · ${j.new_applicants} new` : ''}</Text>
         <Row>
-          <PrimaryButton label="Applicants" icon="people-outline" variant="secondary" onPress={() => router.push(`/employer/job/${j.job_id}`)} />
+          <PrimaryButton label="Applicants" icon="people-outline" variant="secondary" onPress={() => router.push({ pathname: '/employer/job', params: { id: j.job_id } })} />
           {canEdit && (j.status === 'draft' || j.status === 'rejected') && <><PrimaryButton label="Edit" variant="secondary" icon="create-outline" onPress={() => router.push(`/post-job?id=${j.job_id}`)} /><PrimaryButton label="Submit for review" icon="paper-plane-outline" disabled={!verified} onPress={() => run(() => supabase.rpc('submit_job_for_review', { p_job: j.job_id }), 'Submitted. A reviewer will check it shortly.')} /></>}
           {canEdit && j.status === 'published' && <PrimaryButton label="Pause" variant="secondary" onPress={() => setConfirm({ job: j, to: 'paused' })} />}
           {canEdit && j.status === 'paused' && !j.moderation_hold && <PrimaryButton label="Resume" onPress={() => run(() => supabase.rpc('set_job_status', { p_job: j.job_id, p_to: 'published' }), 'Job is live again.')} />}

@@ -13,7 +13,7 @@ test.describe('production build is honest and safe', () => {
     await expect(page.getByText('Aarvya Global Ventures LLP')).toBeVisible();
   });
 
-  for (const path of ['/candidate', '/candidate/profile', '/candidate/applications', '/employer', '/employer/jobs', '/employer/discover', '/post-job', '/admin']) {
+  for (const path of ['/candidate', '/candidate/profile', '/candidate/applications', '/candidate/job?id=00000000-0000-0000-0000-000000000000', '/employer', '/employer/jobs', '/employer/job?id=00000000-0000-0000-0000-000000000000', '/employer/discover', '/post-job', '/admin']) {
     test(`anonymous visitors are redirected away from ${path}`, async ({ page }) => {
       await page.goto(path);
       await expect(page).toHaveURL(/\/login/);
@@ -63,6 +63,12 @@ test('pages load without console errors or CSP violations', async ({ page }) => 
   for (const p of ['/', '/login', '/privacy']) { await page.goto(p); await page.waitForLoadState('networkidle'); }
   expect(problems).toEqual([]);
   await page.goto('/'); await expect(page).toHaveTitle(/KaamSetu/);
+});
+
+test('every route is a real static file, so deep links work on any static host (no [param] routes)', async () => {
+  const { readdirSync, statSync } = await import('node:fs');
+  const walk = (d: string): string[] => readdirSync(d).flatMap((f) => (statSync(`${d}/${f}`).isDirectory() ? walk(`${d}/${f}`) : [`${d}/${f}`]));
+  expect(walk('dist').filter((f) => f.endsWith('.html') && /\[/.test(f))).toEqual([]);
 });
 
 test.describe('accessibility (axe, WCAG 2 A/AA)', () => {

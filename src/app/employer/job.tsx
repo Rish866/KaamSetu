@@ -1,15 +1,15 @@
 import { useLocalSearchParams } from 'expo-router';
 import React, { useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
-import { AppShell } from '../../../components/AppShell';
-import { Banner, Chips, ConfirmDialog, Field, Row, StateView, unwrap, useLoad } from '../../../components/kit';
-import { Card, Pill, PrimaryButton } from '../../../components/ui';
-import { useMembership } from '../../../lib/company';
-import { openWhenReady } from '../../../lib/files';
-import { formatExperience, friendlyError, labelize, parseLocalDateTime, stageLabels, timeAgo } from '../../../lib/format';
-import { supabase } from '../../../lib/supabase';
-import { useAuth } from '../../../state/AuthContext';
-import { colors } from '../../../theme';
+import { AppShell } from '../../components/AppShell';
+import { Banner, Chips, ConfirmDialog, Field, Row, StateView, unwrap, useLoad } from '../../components/kit';
+import { Card, Pill, PrimaryButton } from '../../components/ui';
+import { useMembership } from '../../lib/company';
+import { openWhenReady } from '../../lib/files';
+import { formatExperience, friendlyError, labelize, parseLocalDateTime, stageLabels, timeAgo } from '../../lib/format';
+import { supabase } from '../../lib/supabase';
+import { useAuth } from '../../state/AuthContext';
+import { colors } from '../../theme';
 
 type Applicant = { application_id: string; candidate_id: string; display_name: string; headline: string | null; experience_months: number; stage: string; applied_at: string; note: string | null; score: number | null;
   match: { components?: Record<string, { score: number | null; explanation: string; weight: number }> } | null };
