@@ -165,13 +165,16 @@ jobs:
       - name: Build main (what production runs today)
         working-directory: base
         run: npm ci && npx expo export --platform web
-      - name: Same source as the live site? (route bundle hashes)
+      - name: Same app source as the latest release tag (what the live site was built from)
         working-directory: base
         run: |
-          live=$(curl -sS https://www.getkaamsetu.in/ | grep -oE '(index|_layout)-[0-9a-f]{32}\.js' | sort -u | tr '\n' ' ')
-          built=$(ls dist/_expo/static/js/web | grep -oE '^(index|_layout)-[0-9a-f]{32}\.js' | sort -u | tr '\n' ' ')
-          echo "live:  $live"; echo "built: $built"
-          [ "$live" = "$built" ] && echo "Route bundles identical: rollback package is built from the same source as the live site." || echo "::warning::Route bundles differ from the live site."
+          # Bundle hashes are not a reliable identity check: Metro module numbering shifts with build environment.
+          # Instead require that the app source on main is byte-identical to the latest release tag.
+          git fetch -q --tags origin
+          tag=$(git tag --list 'v*' --sort=-v:refname | head -1)
+          git diff --quiet "$tag" HEAD -- src app.json package.json package-lock.json index.ts App.tsx assets \
+            && echo "App source on main is identical to $tag." \
+            || { echo "::error::App source on main differs from $tag; the rollback package would not be the released site."; git diff --stat "$tag" HEAD -- src app.json package.json package-lock.json index.ts App.tsx assets; exit 1; }
       - name: Package
         working-directory: base
         run: bash ../head/scripts/package-website.sh "rollback-${{ github.event.pull_request.base.sha }}" none

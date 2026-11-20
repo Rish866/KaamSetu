@@ -57,8 +57,8 @@ Columns: Implemented (code exists) · CI tested (which evidence) · Deployed · 
 | Signed URLs: owner-only after clean, 60 s, expiry, no public path | `openWhenReady`, `resumeLink` | storage SELECT policy (M4) | UI storage 3–4 (real Storage API, token exp−iat = 60 s, expired link refused) | No | No | CI tested (clean verdict **simulated** by the test) |
 | Employer resume access only after application; revoked on withdrawal | `employer/job.tsx` | `get_applicant_resume`, `employer_can_read_resume` | UI storage 5; PG/SB | No | No | CI tested |
 | Infected/failed files never downloadable | `resume_scan_report` | M4 | UI storage 6 (verdict simulated) | No | No | CI tested |
-| Malware scanning | `supabase/functions/resume-processor`, `_shared/scanner.ts` | M4 pipeline | adapter unit tests use **fake** HTTP; structural checks unit-tested | No | No | **Externally blocked**: no scanner service. All production uploads will stay quarantined |
-| Resume parsing + review | `resume-processor`, `ExtractionReview` | consent-gated | unit (DOCX/PDF text, skills); PG/SB | No | No | Blocked behind scanning |
+| Malware scanning | `scripts/workers/run.mjs`, `scripts/workers/clamscan-docker.sh`, `workers.yml` | M4 pipeline; M6 upload switch + 24 h `scan_timeout` | **real ClamAV** in CI (EICAR, EICAR inside DOCX, clean PDF, fake PDF) on a local Supabase stack; PGlite/PG gate tests | No | No | Uploads **off** until a production scan is verified and an admin enables them |
+| Resume parsing + review | `scripts/workers/run.mjs`, `ExtractionReview` | consent-gated | unit (DOCX/PDF text, skills); worker test on local stack | No | No | Behind the upload switch |
 | Job search, filters, explainable match | `candidate/index.tsx`, `candidate/job.tsx` | `job_feed`, `job_detail`, `match_score` | UI journey 11–12 ("Matches 2 of 2 listed skills"); PG/SB matching 10 | No | No | CI tested |
 | Applications, timeline, withdrawal | `candidate/applications.tsx` | M1 RPCs | UI journey 12, 19; UI storage 5 (withdraw) | No | No | CI tested |
 | Invitations | `employer/discover.tsx` | `invite_candidate` | PG/SB only | No | No | CI tested at DB level; **no UI test** |
@@ -70,11 +70,20 @@ Columns: Implemented (code exists) · CI tested (which evidence) · Deployed · 
 | Candidate discovery | `employer/discover.tsx` | `search_candidates` (quota) | PG/SB only | No | No | CI tested at DB level; **no UI test** |
 | Admin console (companies, jobs, users, privacy, audit) | `admin.tsx` | `admin_*` RPCs | UI journey 8, 10, 21–23; UI auth 10 | No | No | CI tested; reports, email-failure, roles and matching-weights tabs DB-tested only |
 | Notifications (in-app) | `NotificationsView.tsx` | M1/M4 | UI journey 19 | No | No | CI tested |
-| Email delivery | `functions/email-worker`, `_shared/email-templates.ts` | outbox leases (M4) | PG/SB outbox tests; unit templates/providers (fake HTTP) | No | No | **Externally blocked**: no provider, no verified domain |
+| Email delivery | `scripts/workers/run.mjs --task email`, `_shared/email-templates.ts` | outbox leases (M4) | outbox tests; worker test delivers to a local webhook provider on the local stack | No | No | **Owner action**: Resend account, verified domain, `RESEND_API_KEY` |
 | Data export | `SettingsView.tsx` | `request_data_export` | UI journey 20 (file downloaded, own data only) | No | No | CI tested |
-| Account deletion | `SettingsView.tsx`, admin Privacy, `functions/privacy-worker` | `admin_process_deletion` (M4) | UI journey 21–23, auth clean-up; PG/SB | No | No | SQL part CI tested; **privacy-worker (Auth soft delete, file purge) never run** |
+| Account deletion | `SettingsView.tsx`, admin Privacy, `scripts/workers/run.mjs --task privacy` | `admin_process_deletion` (M4) | UI journey 21–23; worker soft delete + file purge on local stack | No | No | Production run needs the migrations |
 | RLS / grants / storage policies | M1–M5 | — | PG 83, SB 81, RH, catalog checks (`scripts/production-checks.sql`) | No | No | CI tested; production catalog checks run after apply |
 | Backups | `production-database.yml` | — | BKP run 44748509470; apply job re-backs up and verifies the artifact first | — | — | Restore drill **not performed** |
 | Website | `src/app/**`, `.openai/hosting.json` | — | WEB, UI | **No** | No | Deploying to Sites needs the owner (no Sites credential here) |
 | Android / iOS | `release-builds.yml`, `eas.json` | — | not built for v1.4.0 | No | No | APK/Simulator after tag; signed store builds owner-blocked |
 | Legal | `src/content/legal.ts`, `docs/PRIVACY.md` | — | WEB: pages marked draft | — | — | Drafts; lawyer review required |
+
+## Added for the coordinated release (2026-11-20)
+
+| Item | Where | Evidence | Production |
+|------|-------|----------|------------|
+| Maintenance mode on an old database | `src/app/_layout.tsx`, `src/app/maintenance.tsx` | `e2e/maintenance.spec.ts` (CI web job); one-off local build against the real v1.3.0 production API: gated routes → `/maintenance`, public pages up | Not deployed |
+| Email + phone sign-up | `src/app/login.tsx`, `src/lib/platform.ts` (hides phone if disabled) | `auth-probe` run 44818660584 **in production**: both sign-ups and sign-ins work, duplicates and wrong password refused, QA accounts deleted (0 left) | Verified on v1.3.0 schema only |
+| Website packages | `scripts/package-website.sh`, CI `web` + `website-rollback-package` | artifacts with manifests and checksums on each PR run | Not deployed |
+| Release plan | `docs/RELEASE_PLAN.md` | n/a | Awaiting approval |

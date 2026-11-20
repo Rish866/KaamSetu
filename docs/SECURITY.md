@@ -27,7 +27,7 @@ GoTrue (sessions, refresh, rate limits, enumeration behaviour), the Storage HTTP
 
 ## Staging checks that need a real Supabase project (not yet run)
 - [ ] Signed URL returns 400/403 after 60 seconds.
-- [ ] Upload of a `.exe` renamed `.pdf` is accepted by Storage (MIME is client-declared) but rejected by the resume-processor structural check (`not_a_pdf`; unit-tested locally).
+- [ ] Upload of a `.exe` renamed `.pdf` is accepted by Storage (MIME is client-declared) but rejected by the worker's structural check (`not_a_pdf`; tested on the local stack in CI).
 - [ ] Session refresh works after 1 hour; inactivity timeout signs the user out.
 - [ ] 31st sign-in attempt within the rate-limit window is throttled.
 - [ ] Password `password12` is rejected server-side.
@@ -54,4 +54,4 @@ GoTrue (sessions, refresh, rate limits, enumeration behaviour), the Storage HTTP
 - [ ] Stored XSS via headline, job description, notes, company description (React escapes output; verify the email worker's HTML escaping).
 - [ ] CSP, clickjacking (`frame-ancestors`), HSTS on the production domain.
 - [ ] Email worker and unsubscribe functions: auth bypass, token guessing.
-- [ ] Review the Edge Function workers (`x-worker-secret` check, service-role usage) and `.github/workflows/production-database.yml` secret handling.
+- [ ] Review `.github/workflows/workers.yml` and `production-database.yml` secret handling (secret key fetched at run time and masked; never written to artifacts).

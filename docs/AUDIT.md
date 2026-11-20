@@ -17,7 +17,8 @@ Status words: Written → Locally tested → CI tested → Merged → Deployed �
 
 ## Merge plan (why PR #3 is not merged yet)
 * PR #2 was closed as superseded; its commit is inside PR #3 unchanged.
-* Whether the OpenAI Sites project redeploys automatically when `main` changes cannot be verified from here. If it does, merging before the database migration would put the live site into the "being updated" screen (the schema guard) until the migration runs. PR #3 is therefore merged **in the deployment window**, immediately before the migration is applied.
+* The owner declined to apply the migrations first because the v1.3.0 website would break. The release is now ordered **website first, then database**, as one coordinated, owner-approved change: docs/RELEASE_PLAN.md. The new website shows a maintenance screen on the old database, verified against the real production API.
+* Whether Sites redeploys automatically on merge is unknown (no GitHub integration evidence). The plan works either way; the owner deploys by hand.
 
 ## Independent review
 `docs/reviews/2026-11-19-210714-pr-2-3.md` (verdict NEEDS_CHANGES, 3 blockers, 7 high). Every blocker and high finding is fixed in `202611200004_review_fixes.sql` plus app changes, each with a test in `tests/db/review-fixes.test.mjs`. Medium/low items that remain open are listed in docs/SECURITY.md "Known gaps".

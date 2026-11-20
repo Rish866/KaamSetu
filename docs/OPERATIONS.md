@@ -3,18 +3,12 @@
 Audience: whoever runs KaamSetu day to day. Commands assume the Supabase CLI is installed and you are logged in
 (`supabase login`) on a trusted computer. Never paste keys into chat, issues or code.
 
-## 1. Deployment window for v1.4.0 (order matters)
+## 1. Deployment window for v1.4.0
 
-Preconditions: repository secrets `SUPABASE_ACCESS_TOKEN`, `SUPABASE_DB_PASSWORD`, `BACKUP_PASSPHRASE` exist; PR #3 CI is green.
-
-1. **Status (read-only):** Actions → "Production database" → Run workflow, ref `feature/product-screens`, action `status`. Confirms migration history and runs `scripts/preflight.sql`. Any row under "blocker" must be fixed first.
-2. **Dry run:** same, action `dry-run`. Shows exactly which migrations would apply (expected: 202611200001, 0002, 0003, 0004).
-3. **Merge PR #3** (closes PR #2 as superseded). Confirm CI on `main` is green.
-4. **Apply:** action `apply`, ref `main`, confirm `APPLY zrexqtzhdkkupyxmfqxd`. The job takes an encrypted backup first (artifact `production-backup-<timestamp>`), applies only unapplied migrations, prints history, runs `scripts/production-checks.sql` (RLS on every table, no anon-executable functions, private buckets, worker functions not callable by users) and `scripts/verify-production.mjs`.
-5. **Website:** the owner deploys `dist/` from `main` to the existing Sites project (`.openai/hosting.json`), keeping the custom domain and public audience. Between steps 4 and 5 the v1.3.0 site is partly broken (its direct writes are now refused). Do 4 and 5 back to back.
-6. **Verify:** `node scripts/verify-production.mjs --expect-schema 202611200004` must pass for both domains. Then run the real-UI journey (`e2e/live/journey.spec.ts`) with the owner-authorised test admin.
-7. **Edge Functions and workers:** `supabase functions deploy email-worker unsubscribe resume-processor privacy-worker`; `supabase secrets set WORKER_SECRET=<random 32+ chars>`; add the same value as GitHub secret `WORKER_SECRET` so the "Background workers" workflow runs every 10 minutes.
-8. Only after 6 passes: tag `v1.4.0` → release workflow builds APK, website archive, Simulator zip, checksums.
+The full, approved-only procedure is **docs/RELEASE_PLAN.md** (website first, then database; downtime estimate; rollback).
+Short form: merge PR #3 → CI on `main` green → `backup` → owner deploys the website (it shows the maintenance screen on the
+old database) → `apply` on `main` with confirm `APPLY zrexqtzhdkkupyxmfqxd` → `checks` → live journey. Never run `apply`
+before the new website is confirmed live. Store builds (`v1.4.0` tag) come later and separately.
 
 ## Migration recovery (forward-only)
 
@@ -40,9 +34,15 @@ request → Admin → Privacy → Process deletion; the privacy worker then soft
 |-----|----------|-----|--------|
 | Expire invitations | hourly | pg_cron (migration 0003) if the extension is available | unverified in production |
 | Retention clean-up | daily 02:30 UTC | pg_cron, periods in `public.retention_policies` | unverified in production |
-| Email delivery | every 10 min | GitHub "Background workers" → `email-worker` | needs WORKER_SECRET + email provider |
-| Resume scan/parse/purge | every 10 min | → `resume-processor` | needs WORKER_SECRET; scanning needs a scanner |
-| Deletion clean-up (auth identity, files) | every 10 min | → `privacy-worker` | needs WORKER_SECRET |
+| Resume scan / parse / purge | every 15 min | GitHub "Background workers" → `scripts/workers/run.mjs --task resumes`: ClamAV (`clamav/clamav:stable` Docker image, bundled signatures) + structural checks; consent-gated parsing; purge of deleted files; scans pending > 24 h fail as `scan_timeout` | CI tested on a local stack (EICAR detected, also inside a DOCX); not run in production |
+| Deletion clean-up (auth identity, files) | every 15 min | same workflow, `--task privacy`: Auth soft delete (frees email/phone) + Storage API purge | CI tested on a local stack; not run in production |
+| Email delivery | every 15 min | same workflow, `--task email`: outbox → Resend | skipped until GitHub secret `RESEND_API_KEY` exists |
+
+The workflow needs no extra secret: it fetches the project's secret API key at run time from the Management API with the
+existing `SUPABASE_ACCESS_TOKEN` (masked in logs, never stored) and does nothing until `schema_version()` ≥ 202611200006.
+Scheduled workflows run only from `main`, so workers start after the merge. Run once by hand: Actions → "Background
+workers" → Run workflow (task `all`). Note: resumes are sent to GitHub-hosted runners for scanning, which makes GitHub a
+processor of resume files **[LEGAL REVIEW]**. Resume uploads stay switched off (Admin → System) until a production scan is verified.
 
 ## 3. Daily review (pilot)
 
@@ -50,7 +50,7 @@ request → Admin → Privacy → Process deletion; the privacy worker then soft
 2. Clear the company and job queues (target: within one working day).
 3. Reports: anything about fees or fraud is handled the same day (pause the job, suspend the company if confirmed).
 4. Privacy queue: confirm identity by email reply before processing deletion.
-5. System tab: failed emails. If many, check the provider dashboard and the `email-worker` logs.
+5. System tab: failed emails and the resume-upload switch. If many emails fail, check the Resend dashboard and the "Background workers" run log.
 6. Supabase Dashboard → Logs: auth errors, 5xx from the API, unusual sign-up spikes.
 7. Record pilot metrics (docs/PILOT.md).
 
@@ -88,10 +88,9 @@ sign in as test employer → jobs and applicants load → admin console overview
 | Secret | Where it lives | Rotate |
 |--------|----------------|--------|
 | Supabase publishable key | GitHub variable `EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY`, app builds | Dashboard → API keys → create new publishable key, update the GitHub variable, rebuild web and apps, then revoke the old key after users update |
-| Supabase secret / service-role key | Supabase function env (automatic), owner's password manager | Dashboard → API keys → roll; Edge Functions pick up the new key automatically |
-| WORKER_SECRET | `supabase secrets` and GitHub secret | generate a new random value, set it in both places within minutes |
+| Supabase secret key | Supabase (fetched at run time by the workers and production workflows; not stored in GitHub) | Dashboard → API keys → create a new secret key, delete the old one; workflows pick up the new key on their next run |
 | DB password | password manager, GitHub secret `SUPABASE_DB_PASSWORD` | Dashboard → Database → reset password; update the GitHub secret |
-| Email provider key | `supabase secrets` | create a new key at the provider, `supabase secrets set EMAIL_API_KEY=...`, revoke old |
+| Resend API key | GitHub secret `RESEND_API_KEY` (also used as the Supabase Auth SMTP password) | create a new key in Resend, update the GitHub secret, run `Production database` → `email-setup`, delete the old key |
 | Android upload keystore | GitHub secrets `ANDROID_*` + offline backup | only if compromised: request upload-key reset in Play Console |
 | Expo token | GitHub secret `EXPO_TOKEN` | expo.dev → Access tokens → revoke and recreate |
 
@@ -100,5 +99,5 @@ Rotate immediately if a key may have been exposed, and every 12 months otherwise
 ## 8. Monitoring and logging
 
 * Errors are shown to users as plain messages (`friendlyError`), never raw SQL or stack traces.
-* The email worker logs only job IDs and error classes, never addresses. Notification titles never contain names, emails or phones (tested).
+* The workers log only job IDs and error classes, never addresses. Notification titles never contain names, emails or phones (tested).
 * Recommended next step (owner choice, free tier available): Sentry for React Native with `sendDefaultPii: false` and a `beforeSend` that strips `email`, `phone`, `password`. Not installed yet to avoid adding a third-party data processor without legal review.

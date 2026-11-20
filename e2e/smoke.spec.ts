@@ -3,6 +3,12 @@ import { expect, test } from '@playwright/test';
 
 const publicPages = ['/', '/login', '/privacy', '/terms', '/support'];
 
+// These checks are about this build, not about the database it happens to point at: report a current schema so the
+// maintenance redirect (covered in maintenance.spec.ts) does not race them. Tests that register their own routes win.
+test.beforeEach(async ({ page }) => {
+  await page.route('**/rest/v1/rpc/schema_version', (route) => route.fulfill({ json: '202611200006' }));
+});
+
 test.describe('production build is honest and safe', () => {
   test('landing page contains no fabricated statistics or prototype labels', async ({ page }) => {
     await page.goto('/');

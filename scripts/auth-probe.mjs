@@ -10,6 +10,15 @@ const anon = process.env.ANON_KEY;
 const service = process.env.SERVICE_KEY;
 const dbUrl = process.env.DB_URL;
 if (!url || !anon || !service || !dbUrl) { console.error('SUPABASE_URL, ANON_KEY, SERVICE_KEY and DB_URL are required'); process.exit(2); }
+{
+  // After the v1.4.0 migrations, consent and audit history is immutable and hard deletes are refused by design, so the
+  // probe's QA accounts could not be removed. It is a pre-migration check only; afterwards use the live journey spec.
+  const guard = new pg.Client({ connectionString: dbUrl.replace(/([?&])sslmode=[^&]*&?/, '$1').replace(/[?&]$/, ''), ssl: { rejectUnauthorized: false } });
+  await guard.connect();
+  const { rows } = await guard.query("select to_regprocedure('public.schema_version()') is not null as migrated");
+  await guard.end();
+  if (rows[0].migrated) { console.error('Database already has the v1.4.0 schema: auth-probe would create undeletable accounts. Refusing.'); process.exit(2); }
+}
 const run = Date.now().toString(36);
 const pw = `Probe-${run}-${Math.random().toString(36).slice(2, 10)}A9`;
 const email = `qa+probe-${run}@getkaamsetu.in`;
