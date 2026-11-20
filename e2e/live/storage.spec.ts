@@ -107,3 +107,14 @@ test('infected and failed files can never be downloaded', async () => {
   await owner.reload();
   await expect(owner.getByText(/was not accepted: our virus scanner flagged it/)).toBeVisible();
 });
+
+test('while resume uploads are switched off, candidates see an honest explanation and no upload control', async () => {
+  await q(`update private.settings set value = 'false'::jsonb where key = 'resume_uploads_enabled'`);
+  try {
+    await owner.goto(`${env.base}/candidate/profile`);
+    await expect(owner.getByText(/Resume upload is temporarily unavailable while we set up virus scanning/)).toBeVisible({ timeout: 20_000 });
+    await expect(owner.getByRole('button', { name: /^(Upload resume|Replace resume)$/ })).toHaveCount(0);
+    const direct = await api(`object/resumes/${ownerId}/sneaky.pdf`, ownerToken, { method: 'POST', body: '%PDF-1.4', headers: { 'Content-Type': 'application/pdf' } });
+    expect(direct.status, 'storage refuses uploads while switched off').toBeGreaterThanOrEqual(400);
+  } finally { await q(`update private.settings set value = 'true'::jsonb where key = 'resume_uploads_enabled'`); }
+});

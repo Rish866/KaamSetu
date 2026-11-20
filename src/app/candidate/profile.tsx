@@ -6,6 +6,7 @@ import { Card, Pill, PrimaryButton } from '../../components/ui';
 import { NOTICE_VERSION } from '../../content/legal';
 import { MAX_PHOTO_BYTES, MAX_RESUME_BYTES, openWhenReady, PHOTO_TYPES, pickFile, RESUME_TYPES, resumeLink, uploadResume } from '../../lib/files';
 import { formatExperience, formatSalaryAmount, friendlyError, labelize } from '../../lib/format';
+import { usePlatformFlags } from '../../lib/platform';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../state/AuthContext';
 import { colors } from '../../theme';
@@ -37,6 +38,7 @@ export default function ProfileScreen() {
   const completion = useLoad(async () => unwrap(await supabase.rpc('my_profile_completion')) as { percent: number; missing: string[] }, []);
   const photo = useLoad(async () => { const path = bundle.data?.profile.photo_path; if (!path) return null; const { data } = await supabase.storage.from('profile-photos').createSignedUrl(path, 300); return data?.signedUrl ?? null; }, [bundle.data?.profile.photo_path]);
 
+  const flags = usePlatformFlags();
   const [msg, setMsg] = useState<{ tone: 'error' | 'success'; text: string } | null>(null);
   const [form, setForm] = useState<{ headline: string; years: string; notice: string; expected: string; current: string; period: 'monthly' | 'annual'; status: string | null; modes: string[]; types: string[]; loc: string | null; prefs: string[]; skills: string[] } | null>(null);
   const [dirtyKey, setDirtyKey] = useState<unknown>(null);
@@ -120,7 +122,9 @@ export default function ProfileScreen() {
             <Row><PrimaryButton label="Download" variant="secondary" icon="download-outline" disabled={r.scan_status !== 'clean'} onPress={() => download(r.storage_path)} /><PrimaryButton label="Delete" variant="ghost" icon="trash-outline" onPress={() => setDelResume(r)} /></Row></View>)}
           {b.resumes.filter((r) => !r.active && (r.scan_status === 'infected' || r.scan_status === 'failed')).slice(0, 1).map((r) => <Banner key={r.id} tone="error">Your last upload ({r.original_name}) was not accepted: {blockedReason(r.scan_detail, r.scan_status)}. Upload a different file.</Banner>)}
           {b.resumes.every((r) => !r.active) && <Text style={styles.muted}>No resume uploaded.</Text>}
-          <PrimaryButton label={b.resumes.some((r) => r.active) ? 'Replace resume' : 'Upload resume'} icon="cloud-upload-outline" onPress={() => upload('resume')} />
+          {flags?.resume_uploads_enabled
+            ? <PrimaryButton label={b.resumes.some((r) => r.active) ? 'Replace resume' : 'Upload resume'} icon="cloud-upload-outline" onPress={() => upload('resume')} />
+            : <Banner tone="info">{flags ? 'Resume upload is temporarily unavailable while we set up virus scanning for uploaded files. Your profile, job search and applications work without a resume.' : 'Checking resume upload availability…'}</Banner>}
           {b.extraction && <Card style={styles.review}><Text style={styles.line}>Suggested from your resume. Choose what to add:</Text><ExtractionReview extraction={b.extraction} onDone={refresh} onError={bad} /></Card>}
           <Text style={styles.muted}>Resume reading needs your permission in Settings. Nothing is added to your profile without your review.</Text></Card>
         <Card style={{ gap: 12 }}><SectionHead title="Preview" sub="What a verified employer sees if you enable discovery. Name, email, phone and resume are hidden." />

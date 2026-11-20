@@ -1,11 +1,16 @@
 name: Background workers
 
-# Triggers the trusted Supabase Edge Function workers on a schedule. Each worker authenticates the call with WORKER_SECRET
-# (set the same value in GitHub secrets and in `supabase secrets set WORKER_SECRET=...`). Skips cleanly until configured.
+# Production background workers: resume malware scanning (ClamAV), resume parsing, account clean-up, email delivery.
+# Uses the existing SUPABASE_ACCESS_TOKEN secret to fetch the project's service key at run time (masked, never stored).
+# Does nothing until the database has migration 202611200006. Email is sent only if RESEND_API_KEY is configured.
 on:
   schedule:
-    - cron: '*/10 * * * *'
+    - cron: '*/15 * * * *'
   workflow_dispatch:
+    inputs:
+      task:
+        description: all | resumes | privacy | email
+        default: all
 
 permissions:
   contents: read
@@ -14,22 +19,48 @@ concurrency:
   group: workers
   cancel-in-progress: false
 
+env:
+  PROJECT_REF: zrexqtzhdkkupyxmfqxd
+  SUPABASE_URL: https://zrexqtzhdkkupyxmfqxd.supabase.co
+
 jobs:
   run:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 20
     steps:
-      - name: Call workers
+      - uses: actions/checkout@v4
+      - name: Service key from the Management API (masked)
+        id: key
         env:
-          WORKER_SECRET: ${{ secrets.WORKER_SECRET }}
-          BASE: https://zrexqtzhdkkupyxmfqxd.supabase.co/functions/v1
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
         run: |
-          if [ -z "$WORKER_SECRET" ]; then echo "::notice::WORKER_SECRET is not set; workers are not scheduled yet."; exit 0; fi
-          fail=0
-          for fn in email-worker resume-processor privacy-worker; do
-            code=$(curl -s -o out.json -w "%{http_code}" -X POST -H "x-worker-secret: $WORKER_SECRET" "$BASE/$fn" || echo 000)
-            echo "$fn -> HTTP $code $(head -c 300 out.json)"
-            # 503 from email-worker means no email provider is configured: messages stay queued and visible to admins.
-            if [ "$code" != "200" ] && ! { [ "$fn" = "email-worker" ] && [ "$code" = "503" ]; }; then fail=1; fi
-          done
-          exit $fail
+          set -euo pipefail
+          [ -n "$SUPABASE_ACCESS_TOKEN" ] || { echo "::notice::SUPABASE_ACCESS_TOKEN not set"; echo "ready=false" >> "$GITHUB_OUTPUT"; exit 0; }
+          keys=$(curl -sSf -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" "https://api.supabase.com/v1/projects/$PROJECT_REF/api-keys?reveal=true")
+          k=$(echo "$keys" | jq -r '([.[] | select(.type == "secret") | .api_key][0]) // ([.[] | select(.name == "service_role") | .api_key][0]) // empty')
+          [ -n "$k" ] || { echo "::error::No service key returned"; exit 1; }
+          echo "::add-mask::$k"
+          v=$(curl -sS -X POST "$SUPABASE_URL/rest/v1/rpc/schema_version" -H "apikey: $k" -H "Authorization: Bearer $k" -H 'Content-Type: application/json' -d '{}' | tr -d '"')
+          echo "Schema version: $v"
+          if [[ "$v" =~ ^[0-9]{12}$ ]] && [ "$v" -ge 202611200006 ]; then echo "ready=true" >> "$GITHUB_OUTPUT"; else echo "::notice::Database not yet migrated; workers skipped."; echo "ready=false" >> "$GITHUB_OUTPUT"; fi
+          echo "SUPABASE_SERVICE_ROLE_KEY=$k" >> "$GITHUB_ENV"
+      - uses: actions/setup-node@v4
+        if: steps.key.outputs.ready == 'true'
+        with:
+          node-version: 22
+          cache: npm
+      - if: steps.key.outputs.ready == 'true'
+        run: npm ci --ignore-scripts
+      - name: ClamAV image
+        if: steps.key.outputs.ready == 'true'
+        run: docker pull -q clamav/clamav:stable && docker run --rm --entrypoint clamscan clamav/clamav:stable --version
+      - name: Run workers
+        if: steps.key.outputs.ready == 'true'
+        env:
+          CLAMSCAN_CMD: bash scripts/workers/clamscan-docker.sh
+          CLAMSCAN_VERSION_CMD: docker run --rm --entrypoint clamscan clamav/clamav:stable --version
+          EMAIL_PROVIDER: ${{ secrets.RESEND_API_KEY != '' && 'resend' || '' }}
+          EMAIL_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          EMAIL_FROM: ${{ vars.EMAIL_FROM || 'KaamSetu <no-reply@getkaamsetu.in>' }}
+          SITE_URL: https://www.getkaamsetu.in
+        run: node --experimental-strip-types scripts/workers/run.mjs --task "${{ inputs.task || 'all' }}"

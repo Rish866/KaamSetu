@@ -24,13 +24,13 @@ test('upgrade path: v1.3.0 production state migrates cleanly and keeps data', { 
   await old.as(cand, (s) => s('insert into public.candidate_profiles (user_id) values ($1)', [cand.id]));
   assert.equal((await old.q('select verification_status s from public.companies where id=$1', [cid])).rows[0].s, 'pending');
   await old.applyMigrations();
-  assert.equal(old.applied.at(-1), '202611200005_production_parity.sql');
+  assert.equal(old.applied.at(-1), '202611200006_resume_upload_gate.sql');
   assert.equal((await old.q('select verification_status s from public.companies where id=$1', [cid])).rows[0].s, 'draft', 'legacy pending company returns to draft');
   await old.as(emp, (s) => s(`select public.submit_company_verification($1,'domain','legacy.example')`, [cid]));
   assert.equal((await old.q('select count(*)::int n from public.notification_preferences')).rows[0].n, 2, 'preferences backfilled');
   const access = await old.as(cand, async (s) => (await s('select * from public.current_user_access()')).rows[0]);
   assert.deepEqual([access.account_kind, access.is_admin, access.status], ['candidate', false, 'active'], 'v1.3.0 password-auth RPC still works');
-  assert.equal((await old.as(null, async (s) => (await s('select public.schema_version() v')).rows[0].v)), '202611200005');
+  assert.equal((await old.as(null, async (s) => (await s('select public.schema_version() v')).rows[0].v)), '202611200006');
 });
 
 test('migrations are not re-runnable by accident: a second apply of 0004 fails loudly rather than silently', { skip: REAL && 'would mutate the shared real database' }, async () => {
@@ -248,4 +248,25 @@ test('migrations leave Supabase-managed event-trigger functions executable by ev
     from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname = 'public' and p.prorettype = 'event_trigger'::regtype`);
   if (!REAL) assert.ok(rows.length >= 1, 'the emulated rls_auto_enable() exists'); // real stack: covered by scripts/rehearse-upgrade.sh
   for (const r of rows) assert.equal(r.pub, true, `${r.sig} must keep PUBLIC EXECUTE`);
+});
+
+test('resume uploads are OFF by default; only an admin can switch them on, with a reason; stale scans fail visibly', async () => {
+  const fresh = await createDb({ resumeUploads: false });
+  const adm = await fresh.signUp('candidate', 'Gate Admin'); await fresh.grantAdmin(adm);
+  const c = await fresh.signUp('candidate', 'Gate Candidate');
+  assert.deepEqual((await fresh.as(c, (s) => s('select public.platform_flags() f'))).rows[0].f, { resume_uploads_enabled: false });
+  assert.ok(await failure(fresh.as(c, (s) => s(`insert into storage.objects (bucket_id,name,owner_id) values ('resumes',$1,$2)`, [`${c.id}/a.pdf`, c.id]))), 'storage upload refused while off');
+  await fresh.q(`insert into storage.objects (bucket_id,name,owner_id,metadata) values ('resumes',$1,$2,'{"size":"10"}')`, [`${c.id}/a.pdf`, c.id]);
+  assert.match(await failure(fresh.as(c, (s) => s(`select public.register_resume($1,'a.pdf','application/pdf',10,$2)`, [`${c.id}/a.pdf`, 'a'.repeat(64)]))) ?? '', /temporarily unavailable/);
+  assert.match(await failure(fresh.as(c, (s) => s(`select public.admin_set_resume_uploads(true,'I want uploads')`))) ?? '', /Not authorised/);
+  assert.match(await failure(fresh.as(adm, (s) => s(`select public.admin_set_resume_uploads(true,'short')`))) ?? '', /reason/);
+  await fresh.as(adm, (s) => s(`select public.admin_set_resume_uploads(true,'ClamAV scan verified on a test file')`));
+  assert.equal((await fresh.as(c, (s) => s('select public.platform_flags() f'))).rows[0].f.resume_uploads_enabled, true);
+  const rid = (await fresh.as(c, (s) => s(`select public.register_resume($1,'a.pdf','application/pdf',10,$2) id`, [`${c.id}/a.pdf`, 'a'.repeat(64)]))).rows[0].id;
+  assert.ok((await fresh.q(`select count(*)::int n from private.audit_events where action='settings.resume_uploads'`)).rows[0].n === 1);
+  await fresh.q(`update public.resumes set created_at = now() - interval '25 hours' where id=$1`, [rid]);
+  assert.match(await failure(fresh.as(c, (s) => s('select public.resume_expire_stale_scans()'))) ?? '', /permission denied/);
+  assert.equal((await fresh.asService((s) => s('select public.resume_expire_stale_scans() n'))).rows[0].n, 1);
+  assert.deepEqual((await fresh.q('select scan_status, scan_detail, active from public.resumes where id=$1', [rid])).rows[0], { scan_status: 'failed', scan_detail: 'scan_timeout', active: false });
+  assert.ok((await fresh.as(c, (s) => s('select kind from public.notifications'))).rows.some((n) => n.kind === 'resume.blocked'));
 });

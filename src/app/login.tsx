@@ -17,6 +17,7 @@ import { Card, Logo, Pill, PrimaryButton } from '../components/ui';
 import { supabase } from '../lib/supabase';
 import { NOTICE_VERSION } from '../content/legal';
 import { validatePassword } from '../lib/password';
+import { useAuthMethods } from '../lib/platform';
 import { AccountKind, useAuth } from '../state/AuthContext';
 import { colors } from '../theme';
 
@@ -49,6 +50,9 @@ export default function LoginScreen() {
   const [loginRole, setLoginRole] = useState<LoginRole>(initialRole);
   const [mode, setMode] = useState<Mode>('sign-in');
   const [identityKind, setIdentityKind] = useState<IdentityKind>('email');
+  const methods = useAuthMethods();
+  // If the project disables phone sign-in, fall back to email.
+  if (!methods.phone && identityKind === 'phone') setIdentityKind('email');
   const [name, setName] = useState('');
   const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
@@ -165,7 +169,7 @@ export default function LoginScreen() {
         <View style={styles.copy}><Text style={styles.title}>{mode === 'sign-in' ? 'Welcome back' : 'Join KaamSetu'}</Text><Text style={styles.subtitle}>{mode === 'sign-in' ? 'Use your registered email or mobile number and password.' : 'One person, one account. Choose how you want to use KaamSetu.'}</Text></View>
         <View style={styles.switchRow}><Choice active={loginRole === 'candidate'} label="Candidate" icon="person" onPress={() => selectRole('candidate')} /><Choice active={loginRole === 'employer'} label="Employer" icon="business" onPress={() => selectRole('employer')} /><Choice active={loginRole === 'admin'} label="Admin" icon="shield-checkmark" onPress={() => selectRole('admin')} /></View>
         {mode === 'sign-up' && <Field label="Full name" value={name} onChangeText={setName} placeholder="Your full name" autoComplete="name" />}
-        <View style={styles.identityRow}><ModeButton active={identityKind === 'email'} label="Email address" onPress={() => { setIdentityKind('email'); setIdentifier(''); }} /><ModeButton active={identityKind === 'phone'} label="Mobile number" onPress={() => { setIdentityKind('phone'); setIdentifier(''); }} /></View>
+        {methods.phone && <View style={styles.identityRow}><ModeButton active={identityKind === 'email'} label="Email address" onPress={() => { setIdentityKind('email'); setIdentifier(''); }} /><ModeButton active={identityKind === 'phone'} label="Mobile number" onPress={() => { setIdentityKind('phone'); setIdentifier(''); }} /></View>}
         <Field label={identityKind === 'email' ? 'Email address' : 'Indian mobile number'} value={identifier} onChangeText={setIdentifier} placeholder={identityKind === 'email' ? 'name@example.com' : '98765 43210'} keyboardType={identityKind === 'email' ? 'email-address' : 'phone-pad'} prefix={identityKind === 'phone' ? '+91' : undefined} autoCapitalize="none" autoCorrect={false} autoComplete={identityKind === 'email' ? 'email' : 'tel'} />
         <Field label="Password" value={password} onChangeText={setPassword} placeholder="At least 10 characters" secureTextEntry={!showPassword} autoCapitalize="none" autoComplete={mode === 'sign-in' ? 'current-password' : 'new-password'} rightIcon={showPassword ? 'eye-off-outline' : 'eye-outline'} onRightPress={() => setShowPassword((value) => !value)} />
         {mode === 'sign-up' && <Field label="Confirm password" value={confirmPassword} onChangeText={setConfirmPassword} placeholder="Enter the same password again" secureTextEntry={!showPassword} autoCapitalize="none" autoComplete="new-password" />}

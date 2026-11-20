@@ -30,6 +30,7 @@ export default function Root({ children }: PropsWithChildren) {
       <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no" />
       <meta httpEquiv="Content-Security-Policy" content={csp} />
       <meta name="referrer" content="strict-origin-when-cross-origin" />
+      <meta name="kaamsetu-build" content={process.env.EXPO_PUBLIC_BUILD_SHA ?? 'local'} />
       <title>KaamSetu: verified jobs with visible salaries</title>
       <meta name="description" content="KaamSetu connects candidates with verified employers in Mumbai, Navi Mumbai, Thane and Pune. Every job shows its salary and every match score explains itself." />
       <ScrollViewStyleReset />

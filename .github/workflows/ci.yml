@@ -88,7 +88,12 @@ jobs:
         with:
           version: 3.2.0
       - run: npx playwright install --with-deps chromium
-      - name: Local stack + local production build + live specs
+      - name: Pull ClamAV image (signature database included)
+        run: docker pull clamav/clamav:stable && docker run --rm --entrypoint clamscan clamav/clamav:stable --version
+      - name: Local stack + local production build + live specs + workers
+        env:
+          CLAMSCAN_CMD: bash scripts/workers/clamscan-docker.sh
+          CLAMSCAN_VERSION_CMD: docker run --rm --entrypoint clamscan clamav/clamav:stable --version
         run: bash scripts/local-stack-e2e.sh
       - name: Results summary
         if: always()
@@ -105,7 +110,7 @@ jobs:
           deno-version: v2.x
       - name: deno check
         working-directory: supabase/functions
-        run: deno check email-worker/index.ts unsubscribe/index.ts resume-processor/index.ts privacy-worker/index.ts
+        run: deno check unsubscribe/index.ts _shared/resume-core.ts _shared/email-templates.ts _shared/scanner.ts
 
   web:
     name: Web production build, browser, accessibility and responsive tests
@@ -118,17 +123,64 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run build:web
+        env:
+          EXPO_PUBLIC_BUILD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
       - name: No service-role secrets in the web bundle
         run: |
           # Real secret keys look like sb_secret_<40+ chars>; legacy service JWTs contain base64 of "service_role".
           if grep -rIl -E "sb_secret_[A-Za-z0-9_-]{20,}|c2VydmljZV9yb2xl|SUPABASE_SERVICE_ROLE_KEY" dist; then echo "Secret key material found in dist"; exit 1; fi
       - run: npx playwright install --with-deps chromium
       - run: npm run test:e2e
+      - name: Package the tested website (deployable archive + manifest + checksum)
+        if: vars.EXPO_PUBLIC_SUPABASE_URL != ''
+        run: bash scripts/package-website.sh "${{ github.event.pull_request.head.sha || github.sha }}" "${{ github.event.pull_request.head.sha || github.sha }}"
+      - uses: actions/upload-artifact@v4
+        if: vars.EXPO_PUBLIC_SUPABASE_URL != ''
+        with:
+          name: website-${{ github.event.pull_request.head.sha || github.sha }}
+          path: website-package/
+          retention-days: 90
+          if-no-files-found: error
       - uses: actions/upload-artifact@v4
         if: failure()
         with:
           name: playwright-traces
           path: test-results
+
+  website-rollback-package:
+    name: Rollback website package (current production code on main)
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request' && vars.EXPO_PUBLIC_SUPABASE_URL != ''
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          path: base
+      - uses: actions/checkout@v4
+        with:
+          path: head
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Build main (what production runs today)
+        working-directory: base
+        run: npm ci && npx expo export --platform web
+      - name: Same source as the live site? (route bundle hashes)
+        working-directory: base
+        run: |
+          live=$(curl -sS https://www.getkaamsetu.in/ | grep -oE '(index|_layout)-[0-9a-f]{32}\.js' | sort -u | tr '\n' ' ')
+          built=$(ls dist/_expo/static/js/web | grep -oE '^(index|_layout)-[0-9a-f]{32}\.js' | sort -u | tr '\n' ' ')
+          echo "live:  $live"; echo "built: $built"
+          [ "$live" = "$built" ] && echo "Route bundles identical: rollback package is built from the same source as the live site." || echo "::warning::Route bundles differ from the live site."
+      - name: Package
+        working-directory: base
+        run: bash ../head/scripts/package-website.sh "rollback-${{ github.event.pull_request.base.sha }}" none
+      - uses: actions/upload-artifact@v4
+        with:
+          name: website-rollback-${{ github.event.pull_request.base.sha }}
+          path: base/website-package/
+          retention-days: 90
+          if-no-files-found: error
 
   secret-scan:
     name: Secret scan

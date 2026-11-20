@@ -8,9 +8,9 @@ on:
   workflow_dispatch:
     inputs:
       action:
-        description: status | backup | dry-run | drift | apply | checks | functions
+        description: status | backup | dry-run | drift | apply | checks | functions | auth-probe | email-setup
         type: choice
-        options: [status, backup, dry-run, drift, apply, checks, functions]
+        options: [status, backup, dry-run, drift, apply, checks, functions, auth-probe, email-setup]
         default: status
       confirm:
         description: 'Required for apply: type APPLY zrexqtzhdkkupyxmfqxd'
@@ -39,7 +39,7 @@ jobs:
           T: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
           P: ${{ secrets.SUPABASE_DB_PASSWORD }}
           B: ${{ secrets.BACKUP_PASSPHRASE }}
-          W: ${{ secrets.WORKER_SECRET }}
+          R: ${{ secrets.RESEND_API_KEY }}
           ACTION: ${{ inputs.action }}
           CONFIRM: ${{ inputs.confirm }}
         run: |
@@ -47,7 +47,7 @@ jobs:
           [ -z "$T" ] && missing="$missing SUPABASE_ACCESS_TOKEN"
           [ -z "$P" ] && missing="$missing SUPABASE_DB_PASSWORD"
           if [ "$ACTION" = "backup" ] || [ "$ACTION" = "apply" ]; then [ -z "$B" ] && missing="$missing BACKUP_PASSPHRASE"; fi
-          if [ "$ACTION" = "functions" ] && [ -z "$W" ]; then missing="$missing WORKER_SECRET"; fi
+          if [ "$ACTION" = "email-setup" ] && [ -z "$R" ]; then missing="$missing RESEND_API_KEY"; fi
           if [ -n "$missing" ]; then echo "::error::Missing repository secrets:$missing"; exit 1; fi
           if [ "$ACTION" = "apply" ] && [ "$CONFIRM" != "APPLY $PROJECT_REF" ]; then echo "::error::apply requires confirm = 'APPLY $PROJECT_REF'"; exit 1; fi
           echo "Ref: $GITHUB_REF @ $GITHUB_SHA, action: $ACTION"
@@ -109,7 +109,7 @@ jobs:
           node scripts/classify-drift.mjs drift.sql
 
       - name: Pre-flight data checks (read-only)
-        if: inputs.action != 'checks' && inputs.action != 'functions'
+        if: contains(fromJSON('["status","backup","dry-run","drift","apply"]'), inputs.action)
         env:
           DB_URL: ${{ steps.conn.outputs.url }}
         run: psql "$DB_URL" -v ON_ERROR_STOP=1 -f scripts/preflight.sql
@@ -186,14 +186,47 @@ jobs:
           node-version: 22
       - name: Public API verification (anonymous, read-only)
         if: inputs.action == 'apply' || inputs.action == 'checks'
-        run: node scripts/verify-production.mjs --expect-schema 202611200005 || echo "::warning::Public verification reported failures (expected until the v1.4.0 website is deployed)."
+        run: node scripts/verify-production.mjs --expect-schema 202611200006 || echo "::warning::Public verification reported failures (expected until the v1.4.0 website is deployed)."
 
-      - name: Deploy Edge Functions and set worker secret
+      - name: Deploy the public unsubscribe Edge Function
         if: inputs.action == 'functions'
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
-          WORKER_SECRET: ${{ secrets.WORKER_SECRET }}
         run: |
-          supabase secrets set --project-ref "$PROJECT_REF" WORKER_SECRET="$WORKER_SECRET" SITE_URL=https://www.getkaamsetu.in
-          for fn in email-worker unsubscribe resume-processor privacy-worker; do supabase functions deploy "$fn" --project-ref "$PROJECT_REF"; done
+          supabase functions deploy unsubscribe --project-ref "$PROJECT_REF" --no-verify-jwt
           supabase functions list --project-ref "$PROJECT_REF"
+
+      - name: Project API keys for probes (masked)
+        if: inputs.action == 'auth-probe'
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: |
+          keys=$(curl -sSf -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" "https://api.supabase.com/v1/projects/$PROJECT_REF/api-keys?reveal=true")
+          a=$(echo "$keys" | jq -r '([.[] | select(.type == "publishable") | .api_key][0]) // ([.[] | select(.name == "anon") | .api_key][0])')
+          k=$(echo "$keys" | jq -r '([.[] | select(.type == "secret") | .api_key][0]) // ([.[] | select(.name == "service_role") | .api_key][0])')
+          echo "::add-mask::$k"
+          echo "ANON_KEY=$a" >> "$GITHUB_ENV"; echo "SERVICE_KEY=$k" >> "$GITHUB_ENV"
+
+      - uses: actions/setup-node@v4
+        if: inputs.action == 'auth-probe'
+        with:
+          node-version: 22
+          cache: npm
+      - name: Production sign-up probe (creates and deletes two QA accounts)
+        if: inputs.action == 'auth-probe'
+        env:
+          SUPABASE_URL: https://zrexqtzhdkkupyxmfqxd.supabase.co
+          DB_URL: ${{ steps.conn.outputs.url }}
+        run: npm ci --ignore-scripts && node scripts/auth-probe.mjs
+
+      - name: Configure Auth SMTP (Resend) through the Management API
+        if: inputs.action == 'email-setup'
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          FROM: ${{ vars.EMAIL_FROM_ADDRESS || 'no-reply@getkaamsetu.in' }}
+        run: |
+          body=$(jq -n --arg pass "$RESEND_API_KEY" --arg from "$FROM" '{smtp_host:"smtp.resend.com", smtp_port:"465", smtp_user:"resend", smtp_pass:$pass, smtp_admin_email:$from, smtp_sender_name:"KaamSetu", rate_limit_email_sent:30}')
+          code=$(curl -sS -o resp.json -w "%{http_code}" -X PATCH -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" -H 'Content-Type: application/json' -d "$body" "https://api.supabase.com/v1/projects/$PROJECT_REF/config/auth")
+          echo "Management API status: $code"; jq '{smtp_host, smtp_port, smtp_user, smtp_admin_email, smtp_sender_name, rate_limit_email_sent}' resp.json
+          [ "$code" = "200" ]

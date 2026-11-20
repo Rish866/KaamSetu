@@ -49,13 +49,14 @@ alter default privileges for role postgres in schema public grant execute on fun
 `;
 
 /** Applies migrations whose file name sorts at or before `until` (all when omitted). */
-export async function createDb({ until, seed = true } = {}) {
+export async function createDb({ until, seed = true, resumeUploads = true } = {}) {
   if (REAL) {
     if (until) throw new Error('createDb({ until }) is PGlite-only; the real-Supabase upgrade path is rehearsed by CI (supabase-db job)');
     const pool = new pg.Pool({ connectionString: process.env.KAAMSETU_PG_URL, max: 8, allowExitOnIdle: true });
     const api = new Api(new RealDb(pool));
     api.applied = migrationFiles();
     if (seed) await api.db.exec(readFileSync(join(root, 'supabase', 'seed.sql'), 'utf8'));
+    await api.setResumeUploads(resumeUploads);
     return api;
   }
   const db = new PGlite({ extensions: { pgcrypto } });
@@ -64,6 +65,7 @@ export async function createDb({ until, seed = true } = {}) {
   const api = new Api(db);
   await api.applyMigrations({ until });
   if (seed) await db.exec(readFileSync(join(root, 'supabase', 'seed.sql'), 'utf8'));
+  if (!until) await api.setResumeUploads(resumeUploads);
   return api;
 }
 
@@ -138,6 +140,11 @@ export class Api {
 
   /** Superuser query for fixtures and assertions about stored state. */
   q(sql, params) { return this.db.query(sql, params); }
+
+  /** Tests enable resume uploads by default (production starts with them OFF until a scanner is verified). */
+  async setResumeUploads(on) {
+    await this.q(`update private.settings set value = $1::jsonb where key = 'resume_uploads_enabled'`, [JSON.stringify(Boolean(on))]);
+  }
 
   async grantAdmin(user, role = 'admin') {
     await this.q('insert into private.app_roles (user_id, role) values ($1, $2) on conflict do nothing', [user.id, role]);

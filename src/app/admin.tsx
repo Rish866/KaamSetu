@@ -111,6 +111,7 @@ function System({ ask, tick }: P) {
   const status = useLoad(async () => unwrap(await supabase.rpc('admin_email_status')) as { by_status: Record<string, number>; oldest_pending_minutes: number | null; last_sent_at: string | null }, [tick]);
   const q = useLoad(async () => (unwrap(await supabase.rpc('admin_email_failures')) ?? []) as any[], [tick]);
   const resumes = useLoad(async () => (unwrap(await supabase.rpc('admin_resume_queue')) ?? []) as any[], [tick]);
+  const flags = useLoad(async () => unwrap(await supabase.rpc('platform_flags')) as unknown as { resume_uploads_enabled: boolean }, [tick]);
   const s = status.data;
   return <>
     <SectionHead title="Email delivery" sub="Messages stay queued until an email provider is connected and the worker runs. Nothing is marked sent unless the provider accepted it." />
@@ -121,6 +122,9 @@ function System({ ask, tick }: P) {
     </Card>}</StateView>
     <SectionHead title="Failed email deliveries" sub="After 5 failed attempts with backoff, a message stops retrying and appears here." />
     <StateView loading={q.loading} error={q.error} onRetry={q.reload} empty={(q.data ?? []).length === 0} emptyTitle="No failed emails">{(q.data ?? []).map((e) => <Card key={e.id} style={{ gap: 3, padding: 14 }}><Text style={styles.title}>{e.kind}</Text><Text style={styles.muted}>{e.attempts} attempts · {timeAgo(e.created_at)} · {e.last_error ?? 'unknown error'}</Text></Card>)}</StateView>
+    <SectionHead title="Resume uploads" sub="Keep uploads OFF until the malware scanner has processed a test file in production. While OFF, candidates see an explanation and no file can wait in quarantine." />
+    <Card style={styles.rowCard}><Text style={styles.title}>{flags.data?.resume_uploads_enabled ? 'Resume uploads are ON' : 'Resume uploads are OFF'}</Text>
+      {flags.data && <PrimaryButton label={flags.data.resume_uploads_enabled ? 'Turn uploads off' : 'Turn uploads on'} variant="secondary" onPress={() => ask({ title: flags.data!.resume_uploads_enabled ? 'Turn resume uploads off' : 'Turn resume uploads on', message: 'Write what you verified (for example the scanner run ID).', confirm: 'Save', run: (reason) => supabase.rpc('admin_set_resume_uploads', { p_enabled: !flags.data!.resume_uploads_enabled, p_reason: reason }) })} />}</Card>
     <SectionHead title="Resume security queue" sub="File contents are never shown here. Quarantined files cannot be downloaded by anyone until a scanner marks them clean." />
     <StateView loading={resumes.loading} error={resumes.error} onRetry={resumes.reload} empty={(resumes.data ?? []).length === 0} emptyTitle="No resumes waiting or blocked">{(resumes.data ?? []).map((r) => <Card key={r.resume_id} style={styles.rowCard}>
       <View style={{ flex: 1 }}><Text style={styles.title}>{labelize(r.scan_status)}{r.scan_detail ? ` · ${r.scan_detail}` : ''}</Text><Text style={styles.muted}>Uploaded {timeAgo(r.created_at)} · {r.scan_attempts} scan attempts</Text></View>

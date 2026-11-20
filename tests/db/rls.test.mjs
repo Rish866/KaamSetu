@@ -247,6 +247,6 @@ test('no public function is executable by anon; internals are not executable by 
   assert.deepEqual(rows.map((r) => r.sig), ['schema_version()'], 'only the schema-version probe is public');
   const internal = await api.q(`select p.oid::regprocedure::text sig from pg_proc p join pg_namespace n on n.oid=p.pronamespace
     where n.nspname='private' and has_function_privilege('authenticated', p.oid, 'execute')`);
-  const allowed = ['is_company_member', 'is_admin', 'company_is_approved', 'job_is_public', 'job_is_editable', 'user_is_active', 'owner_can_read_resume', 'employer_can_read_resume'];
+  const allowed = ['is_company_member', 'is_admin', 'company_is_approved', 'job_is_public', 'job_is_editable', 'user_is_active', 'owner_can_read_resume', 'employer_can_read_resume', 'resume_uploads_enabled'];
   assert.deepEqual(internal.rows.filter((r) => !allowed.some((a) => r.sig.startsWith(`private.${a}(`))), []);
 });

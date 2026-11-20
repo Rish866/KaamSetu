@@ -54,14 +54,8 @@ max_frequency = "1m"
 enabled = true
 enable_confirmations = false
 
-[functions.email-worker]
-verify_jwt = false
 
 [functions.unsubscribe]
 verify_jwt = false
 
-[functions.resume-processor]
-verify_jwt = false
 
-[functions.privacy-worker]
-verify_jwt = false

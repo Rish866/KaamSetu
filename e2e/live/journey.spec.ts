@@ -39,10 +39,13 @@ test('2. candidate completes the profile', async () => {
   await expect(c.getByText('Skills saved.')).toBeVisible();
 });
 
-test('3-4. candidate uploads a resume; it is quarantined until a scanner marks it clean', async () => {
+test('3-4. candidate uploads a resume (quarantined until scanned) or, while uploads are off, sees why', async () => {
+  await c.goto(`${env.base}/candidate/profile`);
+  const off = c.getByText(/Resume upload is temporarily unavailable while we set up virus scanning/);
+  await expect(off.or(btn(c, /^(Upload resume|Replace resume)$/))).toBeVisible({ timeout: 20_000 });
+  if (await off.isVisible()) { await expect(c.getByRole('button', { name: /Upload resume/ })).toHaveCount(0); return; }
   await uploadResume(c);
-  await expect(c.getByText(/Quarantined: this resume is waiting for a security scan/)).toBeVisible();
-  await expect(btn(c, 'Download')).toBeDisabled();
+  await expect(c.getByText(/Quarantined: this resume is waiting for a security scan|Security check: passed/)).toBeVisible();
 });
 
 test('5-7. employer registers, creates a company and submits verification evidence', async () => {

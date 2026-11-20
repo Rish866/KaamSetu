@@ -48,6 +48,11 @@ export function providerFromEnv(env: Env, fetchImpl: typeof fetch = fetch): Prov
   if (name === 'resend') return { name, send: (to, e) => post('https://api.resend.com/emails', { Authorization: `Bearer ${key}` }, { from, to: [to], subject: e.subject, html: e.html, text: e.text, headers: e.headers }) };
   if (name === 'postmark') return { name, send: (to, e) => post('https://api.postmarkapp.com/email', { 'X-Postmark-Server-Token': key, Accept: 'application/json' },
     { From: from, To: to, Subject: e.subject, HtmlBody: e.html, TextBody: e.text, MessageStream: 'outbound', Headers: Object.entries(e.headers).map(([Name, Value]) => ({ Name, Value })) }) };
+  // Generic HTTPS relay (any provider or an internal relay): POSTs the rendered message as JSON with a bearer key.
+  if (name === 'webhook') {
+    const url = env('EMAIL_WEBHOOK_URL'); if (!url) return null;
+    return { name, send: (to, e) => post(url, { Authorization: `Bearer ${key}` }, { from, to, subject: e.subject, html: e.html, text: e.text, headers: e.headers }) };
+  }
   throw new Error(`unknown_email_provider_${name}`);
 }
 
