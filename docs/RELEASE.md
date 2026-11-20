@@ -11,7 +11,7 @@
 
 - Android package: `com.rish866.kaamsetu`
 - iOS bundle identifier: `com.rish866.kaamsetu`
-- Version: `1.0.0`
+- Version: `1.4.0` (iOS build 5, Android versionCode 5)
 
 ## Signed iPhone release
 
@@ -23,3 +23,7 @@ npx eas-cli@latest build --platform ios --profile production
 ```
 
 Never commit Apple credentials, provisioning profiles, keystores or service-account keys.
+
+## Automated release
+
+Push a tag `vX.Y.Z`. `.github/workflows/release-builds.yml` produces the website archive, Android APK, iOS Simulator zip, SHA256SUMS and release notes from `docs/releases/vX.Y.Z.md`. With signing secrets it also produces a signed AAB and a TestFlight build. See docs/OWNER_ACTIONS.md sections D and E.

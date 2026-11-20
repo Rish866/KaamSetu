@@ -15,6 +15,9 @@ import {
 } from 'react-native';
 import { Card, Logo, Pill, PrimaryButton } from '../components/ui';
 import { supabase } from '../lib/supabase';
+import { NOTICE_VERSION } from '../content/legal';
+import { validatePassword } from '../lib/password';
+import { useAuthMethods } from '../lib/platform';
 import { AccountKind, useAuth } from '../state/AuthContext';
 import { colors } from '../theme';
 
@@ -27,11 +30,17 @@ function indianPhone(value: string) {
   return digits.length === 10 ? `+91${digits}` : null;
 }
 
+// Messages never confirm whether an email or phone number is registered.
 function authMessage(message: string) {
   const normalized = message.toLowerCase();
   if (normalized.includes('invalid login credentials')) return 'The email/mobile number or password is incorrect.';
-  if (normalized.includes('already') || normalized.includes('exists')) return 'An account already exists with this email or mobile number. Please sign in.';
-  return message;
+  if (normalized.includes('already') || normalized.includes('exists') || normalized.includes('duplicate')) return 'We could not create an account with these details. If you already have an account, sign in or reset your password.';
+  if (normalized.includes('rate limit') || normalized.includes('too many')) return 'Too many attempts. Please wait a few minutes and try again.';
+  if (normalized.includes('password')) return 'Choose a stronger password: at least 10 characters with upper case, lower case and a number.';
+  if (normalized.includes('not confirmed')) return 'Please confirm your email address using the link we sent, then sign in.';
+  if (normalized.includes('captcha')) return 'Please complete the security check and try again.';
+  if (normalized.includes('fetch') || normalized.includes('network')) return 'You appear to be offline. Check your connection and try again.';
+  return 'Something went wrong. Please try again.';
 }
 
 export default function LoginScreen() {
@@ -41,6 +50,9 @@ export default function LoginScreen() {
   const [loginRole, setLoginRole] = useState<LoginRole>(initialRole);
   const [mode, setMode] = useState<Mode>('sign-in');
   const [identityKind, setIdentityKind] = useState<IdentityKind>('email');
+  const methods = useAuthMethods();
+  // If the project disables phone sign-in, fall back to email.
+  if (!methods.phone && identityKind === 'phone') setIdentityKind('email');
   const [name, setName] = useState('');
   const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
@@ -94,8 +106,9 @@ export default function LoginScreen() {
   async function submit() {
     const authCredentials = credentials();
     if (!authCredentials) return setMessage(identityKind === 'email' ? 'Enter a valid email address.' : 'Enter a valid 10-digit Indian mobile number.');
-    if (password.length < 8) return setMessage('Use a password with at least 8 characters.');
+    if (mode === 'sign-in' && !password) return setMessage('Enter your password.');
     if (mode === 'sign-up') {
+      const weak = validatePassword(password); if (weak) return setMessage(weak);
       if (loginRole === 'admin') return setMessage('Administrator accounts can only be created by the platform owner.');
       if (!name.trim()) return setMessage('Please enter your full name.');
       if (password !== confirmPassword) return setMessage('The passwords do not match.');
@@ -117,21 +130,19 @@ export default function LoginScreen() {
 
     const { data, error } = await supabase.auth.signUp({
       ...authCredentials,
-      options: { data: { display_name: name.trim(), account_kind: loginRole, accepted_notice_version: '2026-11-19' } },
+      options: { data: { display_name: name.trim(), account_kind: loginRole, accepted_notice_version: NOTICE_VERSION } },
     });
     if (error) {
       setBusy(false);
       return setMessage(authMessage(error.message));
     }
-    if (data.user?.identities?.length === 0) {
-      await supabase.auth.signOut();
-      setBusy(false);
-      return setMessage('An account already exists with this email or mobile number. Please sign in.');
-    }
-    if (!data.session) {
+    // Supabase returns a user with no identities when the address is already registered. Show the same
+    // neutral message as a fresh sign-up so the screen never reveals which addresses have accounts.
+    if (data.user?.identities?.length === 0 || !data.session) {
+      if (data.session) await supabase.auth.signOut();
       setBusy(false);
       return setMessage(identityKind === 'email'
-        ? 'Your account was created. Confirm your email using the link sent to you, then sign in.'
+        ? 'Check your inbox. If this email can be used, we sent a confirmation link. Confirm it, then sign in.'
         : 'Your account was created but mobile confirmation is enabled in the server settings. Contact support to activate it without SMS.');
     }
     await continueToPortal();
@@ -158,14 +169,14 @@ export default function LoginScreen() {
         <View style={styles.copy}><Text style={styles.title}>{mode === 'sign-in' ? 'Welcome back' : 'Join KaamSetu'}</Text><Text style={styles.subtitle}>{mode === 'sign-in' ? 'Use your registered email or mobile number and password.' : 'One person, one account. Choose how you want to use KaamSetu.'}</Text></View>
         <View style={styles.switchRow}><Choice active={loginRole === 'candidate'} label="Candidate" icon="person" onPress={() => selectRole('candidate')} /><Choice active={loginRole === 'employer'} label="Employer" icon="business" onPress={() => selectRole('employer')} /><Choice active={loginRole === 'admin'} label="Admin" icon="shield-checkmark" onPress={() => selectRole('admin')} /></View>
         {mode === 'sign-up' && <Field label="Full name" value={name} onChangeText={setName} placeholder="Your full name" autoComplete="name" />}
-        <View style={styles.identityRow}><ModeButton active={identityKind === 'email'} label="Email address" onPress={() => { setIdentityKind('email'); setIdentifier(''); }} /><ModeButton active={identityKind === 'phone'} label="Mobile number" onPress={() => { setIdentityKind('phone'); setIdentifier(''); }} /></View>
+        {methods.phone && <View style={styles.identityRow}><ModeButton active={identityKind === 'email'} label="Email address" onPress={() => { setIdentityKind('email'); setIdentifier(''); }} /><ModeButton active={identityKind === 'phone'} label="Mobile number" onPress={() => { setIdentityKind('phone'); setIdentifier(''); }} /></View>}
         <Field label={identityKind === 'email' ? 'Email address' : 'Indian mobile number'} value={identifier} onChangeText={setIdentifier} placeholder={identityKind === 'email' ? 'name@example.com' : '98765 43210'} keyboardType={identityKind === 'email' ? 'email-address' : 'phone-pad'} prefix={identityKind === 'phone' ? '+91' : undefined} autoCapitalize="none" autoCorrect={false} autoComplete={identityKind === 'email' ? 'email' : 'tel'} />
-        <Field label="Password" value={password} onChangeText={setPassword} placeholder="Minimum 8 characters" secureTextEntry={!showPassword} autoCapitalize="none" autoComplete={mode === 'sign-in' ? 'current-password' : 'new-password'} rightIcon={showPassword ? 'eye-off-outline' : 'eye-outline'} onRightPress={() => setShowPassword((value) => !value)} />
+        <Field label="Password" value={password} onChangeText={setPassword} placeholder="At least 10 characters" secureTextEntry={!showPassword} autoCapitalize="none" autoComplete={mode === 'sign-in' ? 'current-password' : 'new-password'} rightIcon={showPassword ? 'eye-off-outline' : 'eye-outline'} onRightPress={() => setShowPassword((value) => !value)} />
         {mode === 'sign-up' && <Field label="Confirm password" value={confirmPassword} onChangeText={setConfirmPassword} placeholder="Enter the same password again" secureTextEntry={!showPassword} autoCapitalize="none" autoComplete="new-password" />}
-        {mode === 'sign-up' && <Pressable onPress={() => setAccepted((value) => !value)} style={styles.consent}><Ionicons name={accepted ? 'checkbox' : 'square-outline'} size={22} color={accepted ? colors.teal : colors.inkSoft} /><Text style={styles.consentText}>I am 18 or older and agree to the Privacy Notice and Terms. KaamSetu will use my chosen identifier for account security and essential updates.</Text></Pressable>}
+        {mode === 'sign-up' && <Pressable accessibilityRole="checkbox" accessibilityState={{ checked: accepted }} accessibilityLabel="I am 18 or older and agree to the Privacy Notice and Terms" onPress={() => setAccepted((value) => !value)} style={styles.consent}><Ionicons name={accepted ? 'checkbox' : 'square-outline'} size={22} color={accepted ? colors.teal : colors.inkSoft} /><Text style={styles.consentText}>I am 18 or older and agree to the Privacy Notice and Terms. KaamSetu will use my chosen identifier for account security and essential updates.</Text></Pressable>}
         <PrimaryButton label={busy ? 'Please wait…' : mode === 'sign-in' ? 'Sign in securely' : 'Create my account'} onPress={submit} disabled={busy} icon={mode === 'sign-in' ? 'log-in-outline' : 'person-add-outline'} />
-        {mode === 'sign-in' && identityKind === 'email' && <Pressable onPress={requestPasswordReset} disabled={busy}><Text style={styles.forgot}>Forgot password?</Text></Pressable>}
-        {message && <View style={styles.message}><Ionicons name="information-circle" size={19} color={colors.teal} /><Text style={styles.messageText}>{message}</Text></View>}
+        {mode === 'sign-in' && identityKind === 'email' && <Pressable accessibilityRole="button" onPress={requestPasswordReset} disabled={busy}><Text style={styles.forgot}>Forgot password?</Text></Pressable>}
+        {message && <View accessibilityRole="alert" style={styles.message}><Ionicons name="information-circle" size={19} color={colors.teal} /><Text style={styles.messageText}>{message}</Text></View>}
         <Text style={styles.help}>{loginRole === 'admin' ? 'Administrator access is granted only by the platform owner.' : 'Your email address or mobile number can be registered only once.'}</Text>
       </Card>
     </ScrollView>
@@ -173,15 +184,15 @@ export default function LoginScreen() {
 }
 
 function ModeButton({ active, disabled, label, onPress }: { active: boolean; disabled?: boolean; label: string; onPress: () => void }) {
-  return <Pressable disabled={disabled} onPress={onPress} style={[styles.modeButton, active && styles.modeButtonActive, disabled && styles.disabled]}><Text style={[styles.modeText, active && styles.modeTextActive]}>{label}</Text></Pressable>;
+  return <Pressable accessibilityRole="button" accessibilityState={{ selected: active, disabled }} disabled={disabled} onPress={onPress} style={[styles.modeButton, active && styles.modeButtonActive, disabled && styles.disabled]}><Text style={[styles.modeText, active && styles.modeTextActive]}>{label}</Text></Pressable>;
 }
 
 function Choice({ active, label, icon, onPress }: { active: boolean; label: string; icon: keyof typeof Ionicons.glyphMap; onPress: () => void }) {
-  return <Pressable onPress={onPress} style={[styles.choice, active && styles.choiceActive]}><Ionicons name={icon} size={20} color={active ? colors.teal : colors.inkSoft} /><Text style={[styles.choiceText, active && styles.choiceTextActive]}>{label}</Text></Pressable>;
+  return <Pressable accessibilityRole="button" accessibilityState={{ selected: active }} onPress={onPress} style={[styles.choice, active && styles.choiceActive]}><Ionicons name={icon} size={20} color={active ? colors.teal : colors.inkSoft} /><Text style={[styles.choiceText, active && styles.choiceTextActive]}>{label}</Text></Pressable>;
 }
 
 function Field({ label, prefix, rightIcon, onRightPress, ...props }: React.ComponentProps<typeof TextInput> & { label: string; prefix?: string; rightIcon?: keyof typeof Ionicons.glyphMap; onRightPress?: () => void }) {
-  return <View style={styles.field}><Text style={styles.label}>{label}</Text><View style={styles.inputWrap}>{prefix && <Text style={styles.prefix}>{prefix}</Text>}<TextInput {...props} style={styles.input} placeholderTextColor="#9AA1B2" />{rightIcon && <Pressable onPress={onRightPress} hitSlop={10}><Ionicons name={rightIcon} size={20} color={colors.inkSoft} /></Pressable>}</View></View>;
+  return <View style={styles.field}><Text style={styles.label}>{label}</Text><View style={styles.inputWrap}>{prefix && <Text style={styles.prefix}>{prefix}</Text>}<TextInput accessibilityLabel={label} {...props} style={styles.input} placeholderTextColor="#9AA1B2" />{rightIcon && <Pressable accessibilityRole="button" accessibilityLabel={rightIcon === 'eye-off-outline' ? 'Hide password' : 'Show password'} onPress={onRightPress} hitSlop={10}><Ionicons name={rightIcon} size={20} color={colors.inkSoft} /></Pressable>}</View></View>;
 }
 
 const styles = StyleSheet.create({

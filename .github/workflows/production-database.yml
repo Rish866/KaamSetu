@@ -8,9 +8,9 @@ on:
   workflow_dispatch:
     inputs:
       action:
-        description: status | backup | dry-run | apply | checks
+        description: status | backup | dry-run | drift | apply | checks | functions | auth-probe | email-setup
         type: choice
-        options: [status, backup, dry-run, apply, checks]
+        options: [status, backup, dry-run, drift, apply, checks, functions, auth-probe, email-setup]
         default: status
       confirm:
         description: 'Required for apply: type APPLY zrexqtzhdkkupyxmfqxd'
@@ -39,6 +39,7 @@ jobs:
           T: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
           P: ${{ secrets.SUPABASE_DB_PASSWORD }}
           B: ${{ secrets.BACKUP_PASSPHRASE }}
+          R: ${{ secrets.RESEND_API_KEY }}
           ACTION: ${{ inputs.action }}
           CONFIRM: ${{ inputs.confirm }}
         run: |
@@ -46,13 +47,14 @@ jobs:
           [ -z "$T" ] && missing="$missing SUPABASE_ACCESS_TOKEN"
           [ -z "$P" ] && missing="$missing SUPABASE_DB_PASSWORD"
           if [ "$ACTION" = "backup" ] || [ "$ACTION" = "apply" ]; then [ -z "$B" ] && missing="$missing BACKUP_PASSPHRASE"; fi
+          if [ "$ACTION" = "email-setup" ] && [ -z "$R" ]; then missing="$missing RESEND_API_KEY"; fi
           if [ -n "$missing" ]; then echo "::error::Missing repository secrets:$missing"; exit 1; fi
           if [ "$ACTION" = "apply" ] && [ "$CONFIRM" != "APPLY $PROJECT_REF" ]; then echo "::error::apply requires confirm = 'APPLY $PROJECT_REF'"; exit 1; fi
           echo "Ref: $GITHUB_REF @ $GITHUB_SHA, action: $ACTION"
 
       - uses: supabase/setup-cli@v1
         with:
-          version: latest
+          version: 3.2.0
 
       - name: Link project
         env:
@@ -82,8 +84,32 @@ jobs:
           echo "::add-mask::$url"
           echo "url=$url" >> "$GITHUB_OUTPUT"
 
+      - name: Production server version and extensions (read-only)
+        if: inputs.action == 'drift' || inputs.action == 'dry-run'
+        env:
+          DB_URL: ${{ steps.conn.outputs.url }}
+        run: |
+          psql "$DB_URL" -At -c "show server_version" -c "select extname || ' ' || extversion from pg_extension order by 1"
+          psql "$DB_URL" -c "select p.oid::regprocedure as function, pg_get_userbyid(p.proowner) as owner, p.proacl from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname = 'public' and pg_get_userbyid(p.proowner) <> 'postgres'" -c "select evtname, evtevent, evtenabled, evtfoid::regprocedure, pg_get_userbyid(evtowner) as owner from pg_event_trigger order by 1"
+
+      - name: Schema drift check (production vs. the migrations it has recorded as applied; read-only)
+        if: inputs.action == 'drift'
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+        run: |
+          set -euo pipefail
+          applied=$(supabase migration list --linked --password "$SUPABASE_DB_PASSWORD" | sed -nE 's/^ *`([0-9]+)` \| `([0-9]+)`.*/\2/p')
+          echo "Remote applied: $applied"
+          W=$(mktemp -d); mkdir -p "$W/supabase/migrations"; cp supabase/config.toml "$W/supabase/"; cp -r supabase/.temp "$W/supabase/" 2>/dev/null || true
+          for v in $applied; do cp supabase/migrations/${v}_*.sql "$W/supabase/migrations/"; done
+          ls "$W/supabase/migrations"
+          supabase db diff --linked --workdir "$W" --schema public,private > drift.sql
+          cat drift.sql
+          node scripts/classify-drift.mjs drift.sql
+
       - name: Pre-flight data checks (read-only)
-        if: inputs.action != 'checks'
+        if: contains(fromJSON('["status","backup","dry-run","drift","apply"]'), inputs.action)
         env:
           DB_URL: ${{ steps.conn.outputs.url }}
         run: psql "$DB_URL" -v ON_ERROR_STOP=1 -f scripts/preflight.sql
@@ -108,12 +134,24 @@ jobs:
           echo "BACKUP_STAMP=$stamp" >> "$GITHUB_ENV"
 
       - uses: actions/upload-artifact@v4
+        id: backup_upload
         if: inputs.action == 'backup' || inputs.action == 'apply'
         with:
           name: production-backup-${{ env.BACKUP_STAMP }}
           path: backup/
           retention-days: 30
           if-no-files-found: error
+
+      - name: Verify the backup artifact exists before anything is applied
+        if: inputs.action == 'backup' || inputs.action == 'apply'
+        env:
+          ID: ${{ steps.backup_upload.outputs.artifact-id }}
+          DIGEST: ${{ steps.backup_upload.outputs.artifact-digest }}
+          URL: ${{ steps.backup_upload.outputs.artifact-url }}
+        run: |
+          [ -n "$ID" ] || { echo "::error::Backup artifact was not created"; exit 1; }
+          for f in backup/*-schema.sql.gpg backup/*-data.sql.gpg backup/*-roles.sql.gpg; do [ -s "$f" ] || { echo "::error::Missing or empty $f"; exit 1; }; done
+          echo "Backup artifact $ID ($URL) digest $DIGEST"
 
       - name: Dry run
         if: inputs.action == 'dry-run' || inputs.action == 'apply'
@@ -148,4 +186,47 @@ jobs:
           node-version: 22
       - name: Public API verification (anonymous, read-only)
         if: inputs.action == 'apply' || inputs.action == 'checks'
-        run: node scripts/verify-production.mjs --expect-schema 202611200004 || echo "::warning::Public verification reported failures (expected until the v1.4.0 website is deployed)."
+        run: node scripts/verify-production.mjs --expect-schema 202611200006 || echo "::warning::Public verification reported failures (expected until the v1.4.0 website is deployed)."
+
+      - name: Deploy the public unsubscribe Edge Function
+        if: inputs.action == 'functions'
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: |
+          supabase functions deploy unsubscribe --project-ref "$PROJECT_REF" --no-verify-jwt
+          supabase functions list --project-ref "$PROJECT_REF"
+
+      - name: Project API keys for probes (masked)
+        if: inputs.action == 'auth-probe'
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: |
+          keys=$(curl -sSf -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" "https://api.supabase.com/v1/projects/$PROJECT_REF/api-keys?reveal=true")
+          a=$(echo "$keys" | jq -r '([.[] | select(.type == "publishable") | .api_key][0]) // ([.[] | select(.name == "anon") | .api_key][0])')
+          k=$(echo "$keys" | jq -r '([.[] | select(.type == "secret") | .api_key][0]) // ([.[] | select(.name == "service_role") | .api_key][0])')
+          echo "::add-mask::$k"
+          echo "ANON_KEY=$a" >> "$GITHUB_ENV"; echo "SERVICE_KEY=$k" >> "$GITHUB_ENV"
+
+      - uses: actions/setup-node@v4
+        if: inputs.action == 'auth-probe'
+        with:
+          node-version: 22
+          cache: npm
+      - name: Production sign-up probe (creates and deletes two QA accounts)
+        if: inputs.action == 'auth-probe'
+        env:
+          SUPABASE_URL: https://zrexqtzhdkkupyxmfqxd.supabase.co
+          DB_URL: ${{ steps.conn.outputs.url }}
+        run: npm ci --ignore-scripts && node scripts/auth-probe.mjs
+
+      - name: Configure Auth SMTP (Resend) through the Management API
+        if: inputs.action == 'email-setup'
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          FROM: ${{ vars.EMAIL_FROM_ADDRESS || 'no-reply@getkaamsetu.in' }}
+        run: |
+          body=$(jq -n --arg pass "$RESEND_API_KEY" --arg from "$FROM" '{smtp_host:"smtp.resend.com", smtp_port:"465", smtp_user:"resend", smtp_pass:$pass, smtp_admin_email:$from, smtp_sender_name:"KaamSetu", rate_limit_email_sent:30}')
+          code=$(curl -sS -o resp.json -w "%{http_code}" -X PATCH -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" -H 'Content-Type: application/json' -d "$body" "https://api.supabase.com/v1/projects/$PROJECT_REF/config/auth")
+          echo "Management API status: $code"; jq '{smtp_host, smtp_port, smtp_user, smtp_admin_email, smtp_sender_name, rate_limit_email_sent}' resp.json
+          [ "$code" = "200" ]

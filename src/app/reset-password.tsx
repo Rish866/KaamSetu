@@ -1,3 +1,4 @@
+import { validatePassword } from '../lib/password';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import React, { useState } from 'react';
@@ -13,7 +14,7 @@ export default function ResetPasswordScreen() {
   const [message, setMessage] = useState<string | null>(null);
 
   async function updatePassword() {
-    if (password.length < 8) return setMessage('Use a password with at least 8 characters.');
+    const weak = validatePassword(password); if (weak) return setMessage(weak);
     if (password !== confirmPassword) return setMessage('The passwords do not match.');
     setBusy(true);
     setMessage(null);
@@ -26,17 +27,17 @@ export default function ResetPasswordScreen() {
 
   return <SafeAreaView style={styles.safe}><View style={styles.page}><Card style={styles.card}>
     <Logo />
-    <View style={styles.copy}><Text style={styles.title}>Choose a new password</Text><Text style={styles.subtitle}>Use at least 8 characters and do not reuse a password from another service.</Text></View>
+    <View style={styles.copy}><Text style={styles.title}>Choose a new password</Text><Text style={styles.subtitle}>Use at least 10 characters with upper case, lower case and a number. Do not reuse a password from another service.</Text></View>
     <Field label="New password" value={password} onChangeText={setPassword} secureTextEntry autoComplete="new-password" />
     <Field label="Confirm new password" value={confirmPassword} onChangeText={setConfirmPassword} secureTextEntry autoComplete="new-password" />
     <PrimaryButton label={busy ? 'Updating…' : 'Update password'} onPress={updatePassword} disabled={busy} icon="key-outline" />
-    {message && <View style={styles.message}><Ionicons name="information-circle" size={19} color={colors.teal} /><Text style={styles.messageText}>{message}</Text></View>}
-    <Pressable onPress={() => router.replace('/login')}><Text style={styles.back}>Return to sign in</Text></Pressable>
+    {message && <View accessibilityRole="alert" style={styles.message}><Ionicons name="information-circle" size={19} color={colors.teal} /><Text style={styles.messageText}>{message}</Text></View>}
+    <Pressable accessibilityRole="link" onPress={() => router.replace('/login')}><Text style={styles.back}>Return to sign in</Text></Pressable>
   </Card></View></SafeAreaView>;
 }
 
 function Field({ label, ...props }: React.ComponentProps<typeof TextInput> & { label: string }) {
-  return <View style={styles.field}><Text style={styles.label}>{label}</Text><TextInput {...props} style={styles.input} placeholder="Minimum 8 characters" placeholderTextColor="#9AA1B2" /></View>;
+  return <View style={styles.field}><Text style={styles.label}>{label}</Text><TextInput accessibilityLabel={label} {...props} style={styles.input} placeholder="At least 10 characters" placeholderTextColor="#9AA1B2" /></View>;
 }
 
 const styles = StyleSheet.create({

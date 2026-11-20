@@ -4,8 +4,9 @@ import { Link } from 'expo-router';
 import React from 'react';
 import { Pressable, SafeAreaView, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { Card, LinkButton, Logo, Pill, SectionTitle } from '../components/ui';
-import { jobs } from '../data/mock';
 import { colors } from '../theme';
+
+const matchFactors: [string, number][] = [['Skills and required capabilities', 35], ['Location and work mode', 25], ['Salary compatibility', 20], ['Experience fit', 15], ['Job freshness', 5]];
 
 export default function HomeScreen() {
   const { width } = useWindowDimensions(); const desktop = width >= 820;
@@ -13,24 +14,24 @@ export default function HomeScreen() {
     <View style={styles.header}><Logo />{desktop && <View style={styles.headerLinks}><Link href={{ pathname: '/login', params: { role: 'candidate' } }} style={styles.headerLink}>For candidates</Link><Link href={{ pathname: '/login', params: { role: 'employer' } }} style={styles.headerLink}>For employers</Link><Link href={{ pathname: '/login', params: { role: 'admin' } }} style={styles.headerLink}>Admin sign in</Link></View>}<LinkButton label="Sign in" href="/login" variant="secondary" /></View>
     <LinearGradient colors={['#171B3D', '#25275A', '#184B64']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={[styles.hero, !desktop && styles.heroMobile]}>
       <View style={styles.heroGlowOne} /><View style={styles.heroGlowTwo} />
-      <View style={styles.heroCopy}><Pill tone="saffron">Built for Mumbai, Thane & Pune</Pill><Text style={[styles.heroTitle, !desktop && styles.heroTitleMobile]}>Stop chasing jobs. Let the right work find you.</Text><Text style={styles.heroText}>KaamSetu connects skilled people with verified employers using transparent salaries, consent-first profiles, and explainable AI matching.</Text>
+      <View style={styles.heroCopy}><Pill tone="saffron">Built for Mumbai, Navi Mumbai, Thane & Pune</Pill><Text style={[styles.heroTitle, !desktop && styles.heroTitleMobile]}>Stop chasing jobs. Let the right work find you.</Text><Text style={styles.heroText}>KaamSetu connects skilled people with verified employers using transparent salaries, consent-first profiles, and match scores that explain themselves.</Text>
         <View style={styles.actions}><LinkButton label="I’m looking for work" href={{ pathname: '/login', params: { role: 'candidate' } }} /><LinkButton label="I’m hiring" href={{ pathname: '/login', params: { role: 'employer' } }} variant="secondary" /></View>
         <View style={styles.trustRow}><View style={styles.trustItem}><Ionicons name="shield-checkmark" size={18} color={colors.teal} /><Text style={styles.trustText}>Verified employers</Text></View><View style={styles.trustItem}><Ionicons name="eye-off" size={18} color={colors.teal} /><Text style={styles.trustText}>Contact details stay private</Text></View></View>
       </View>
-      <View style={styles.matchPanel}><LinearGradient colors={['#7778FF', '#37C7D5']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.panelAccent} /><View style={styles.panelHeader}><Text style={styles.panelLabel}>Your strongest match</Text><Pill>92% match</Pill></View><Text style={styles.jobTitle}>{jobs[0].title}</Text><Text style={styles.company}>{jobs[0].company} · {jobs[0].location}</Text><View style={styles.salaryRow}><Ionicons name="wallet-outline" size={20} color={colors.teal} /><Text style={styles.salary}>{jobs[0].salary}</Text></View>
-        <View style={styles.reasonBox}>{jobs[0].reasons.map((reason) => <View key={reason} style={styles.reason}><Ionicons name="checkmark-circle" size={18} color={colors.success} /><Text style={styles.reasonText}>{reason}</Text></View>)}</View><View style={styles.miniBar}><View style={styles.miniBarFill} /></View><Text style={styles.safeCopy}>You decide whether to apply. Nothing is sent automatically.</Text>
+      <View style={styles.matchPanel}><LinearGradient colors={['#7778FF', '#37C7D5']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.panelAccent} /><Text style={styles.panelLabel}>How a match score works</Text><Text style={styles.jobTitle}>Five factors, shown in plain language</Text>
+        <View style={styles.reasonBox}>{matchFactors.map(([label, weight]) => <View key={label} style={styles.reason}><Ionicons name="checkmark-circle" size={18} color={colors.success} /><Text style={styles.reasonText}>{label} ({weight}%)</Text></View>)}</View>
+        <Text style={styles.safeCopy}>Scores never use your name, photo, gender, religion, caste, age, marital status or disability. You decide whether to apply. Nothing is sent automatically.</Text>
       </View>
-      {desktop && <><View style={styles.liveBadge}><View style={styles.liveDot} /><Text style={styles.liveText}>12 new matches today</Text></View><View style={styles.profileBadge}><View style={styles.avatarStack}><View style={[styles.miniAvatar, { backgroundColor: '#FFCF7D' }]}><Text style={styles.avatarLetter}>A</Text></View><View style={[styles.miniAvatar, styles.avatarOverlap, { backgroundColor: '#AFC1FF' }]}><Text style={styles.avatarLetter}>P</Text></View><View style={[styles.miniAvatar, styles.avatarOverlap, { backgroundColor: '#78DDD1' }]}><Text style={styles.avatarLetter}>R</Text></View></View><Text style={styles.profileText}>100+ pilot candidates</Text></View></>}
     </LinearGradient>
     <View style={styles.section}><SectionTitle eyebrow="One marketplace, two directions" title="Candidates and companies meet in the middle" description="Candidates apply to suitable jobs. Verified employers invite interested candidates without seeing private details first." />
       <View style={[styles.featureGrid, !desktop && styles.stack]}>
         <Feature icon="person" title="For candidates" text="Upload once, confirm your details, see salary-compatible jobs, and track every response." href={{ pathname: '/login', params: { role: 'candidate' } }} label="Create candidate account" />
         <Feature icon="business" title="For employers" text="Publish salary-visible roles, review matched applicants, and invite consenting candidates." href={{ pathname: '/login', params: { role: 'employer' } }} label="Create employer account" tone="saffron" />
-        <Feature icon="sparkles" title="AI with guardrails" text="Every score has reasons. AI helps people decide; it never secretly applies or rejects." label="Explainable by design" tone="coral" />
+        <Feature icon="sparkles" title="Matching with guardrails" text="Every score lists its reasons. Scores help people decide; nothing is applied or rejected automatically." label="Explainable by design" tone="coral" />
       </View>
     </View>
     <LinearGradient colors={['#171B3D', '#26285C']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.cta}><View style={styles.ctaOrb} /><View style={styles.ctaCopy}><Text style={styles.ctaTitle}>A better first step for every job search.</Text><Text style={styles.ctaText}>Create your secure candidate account to view jobs and manage applications.</Text></View><LinkButton label="Create candidate account" href={{ pathname: '/login', params: { role: 'candidate' } }} /></LinearGradient>
-    <Text style={styles.footer}>KaamSetu · Private prototype · Mumbai Metropolitan Region & Pune</Text>
+    <View style={styles.footerRow}><Text style={styles.footer}>KaamSetu by Aarvya Global Ventures LLP · Mumbai, Navi Mumbai, Thane and Pune</Text><Link href="/privacy" style={styles.footerLink}>Privacy</Link><Link href="/terms" style={styles.footerLink}>Terms</Link><Link href="/support" style={styles.footerLink}>Support</Link></View>
   </ScrollView></SafeAreaView>;
 }
 
@@ -42,6 +43,7 @@ function Feature({ icon, title, text, href, label, tone = 'teal' }: { icon: keyo
 }
 
 const styles = StyleSheet.create({
+  footerRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 18, justifyContent: 'center', alignItems: 'center', paddingTop: 24 }, footerLink: { color: colors.teal, fontWeight: '800', fontSize: 13 },
   safe: { flex: 1, backgroundColor: '#FFFFFF' }, page: { paddingHorizontal: 22, paddingBottom: 32, maxWidth: 1280, width: '100%', alignSelf: 'center' },
   header: { minHeight: 90, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 18 }, headerLinks: { flexDirection: 'row', gap: 30, flex: 1, justifyContent: 'center' }, headerLink: { color: colors.inkSoft, fontWeight: '700' },
   hero: { minHeight: 640, borderRadius: 38, padding: 58, flexDirection: 'row', alignItems: 'center', gap: 52, overflow: 'hidden' }, heroMobile: { padding: 24, paddingVertical: 40, flexDirection: 'column', alignItems: 'stretch' },

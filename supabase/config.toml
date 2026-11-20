@@ -1,19 +1,61 @@
 project_id = "kaamsetu"
 
+# Hosted settings are applied with `supabase config push` (owner action, see docs/OWNER_ACTIONS.md).
+# Keys follow https://supabase.com/docs/guides/local-development/cli/config
+
 [auth]
 site_url = "https://www.getkaamsetu.in"
 additional_redirect_urls = [
   "https://www.getkaamsetu.in/reset-password",
-  "https://getkaamsetu.in/reset-password"
+  "https://getkaamsetu.in/reset-password",
+  "kaamsetu://reset-password"
 ]
 enable_signup = true
 enable_anonymous_sign_ins = false
 enable_manual_linking = false
+jwt_expiry = 3600
+enable_refresh_token_rotation = true
+refresh_token_reuse_interval = 10
+# Matches src/lib/password.ts (client checks are for UX; this is the enforced rule).
+minimum_password_length = 10
+password_requirements = "lower_upper_letters_digits"
+
+[auth.rate_limit]
+email_sent = 30
+sms_sent = 0
+sign_in_sign_ups = 30
+token_refresh = 150
+token_verifications = 30
+
+[auth.sessions]
+# Sign users out after 30 days regardless of activity, or 14 days of inactivity. Supabase applies these on paid plans only.
+timebox = "720h"
+inactivity_timeout = "336h"
+
+# CAPTCHA integration point. Enable after creating a Cloudflare Turnstile site (owner action).
+# [auth.captcha]
+# enabled = true
+# provider = "turnstile"
+# secret = "env(SUPABASE_AUTH_CAPTCHA_SECRET)"
 
 [auth.email]
 enabled = true
+# OFF until a custom SMTP provider with a verified domain is configured (Supabase's built-in mailer is for testing only).
+# Consequence while off: email ownership is unverified, so team invitations (which require a confirmed email) cannot be accepted.
+# Turn ON in the same change that configures SMTP. See docs/OWNER_ACTIONS.md.
 enable_confirmations = false
+double_confirm_changes = true
+# The app re-checks the current password before changing it (src/components/SettingsView.tsx).
+secure_password_change = false
+max_frequency = "1m"
 
 [auth.sms]
+# Phone + password sign-in stays enabled; no SMS is sent in the first launch (no OTP, no SMS recovery).
 enabled = true
 enable_confirmations = false
+
+
+[functions.unsubscribe]
+verify_jwt = false
+
+
