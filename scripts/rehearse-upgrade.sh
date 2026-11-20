@@ -19,9 +19,13 @@ echo "Base migrations: $(ls "$W/supabase/migrations" | tr '\n' ' ')"
 echo "Pending migrations: ${pending[*]}"
 supabase db start --workdir "$W"
 psql "$DB" -v ON_ERROR_STOP=1 -f scripts/rehearsal/v130-fixtures.sql
+# Production-only environment differences (restricted default privileges, Supabase-managed event trigger), as superuser.
+psql "${DB/postgres:postgres@/supabase_admin:postgres@}" -v ON_ERROR_STOP=1 -f scripts/rehearsal/prod-environment.sql
 cp "${pending[@]}" "$W/supabase/migrations/"
 supabase migration up --workdir "$W"
 supabase migration list --workdir "$W"
 psql "$DB" -v ON_ERROR_STOP=1 -f scripts/rehearsal/v140-assertions.sql
 psql "$DB" -v ON_ERROR_STOP=1 -f scripts/production-checks.sql
+# Event trigger still works after the migrations, and new public tables still get RLS automatically.
+psql "$DB" -v ON_ERROR_STOP=1 -c "create table public.rehearsal_probe (id int)" -c "select relrowsecurity from pg_class where relname = 'rehearsal_probe'" -c "drop table public.rehearsal_probe"
 supabase stop --no-backup --workdir "$W"

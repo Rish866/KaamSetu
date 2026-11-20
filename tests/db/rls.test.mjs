@@ -242,7 +242,7 @@ test('RLS is enabled on every public and private user-data table', async () => {
 
 test('no public function is executable by anon; internals are not executable by authenticated', async () => {
   const { rows } = await api.q(`select p.oid::regprocedure::text sig from pg_proc p join pg_namespace n on n.oid=p.pronamespace
-    where n.nspname='public' and p.prokind='f' and has_function_privilege('anon', p.oid, 'execute')
+    where n.nspname='public' and p.prokind='f' and p.prorettype <> 'event_trigger'::regtype and has_function_privilege('anon', p.oid, 'execute')
       and not exists (select 1 from pg_depend d where d.objid=p.oid and d.deptype='e')`);
   assert.deepEqual(rows.map((r) => r.sig), ['schema_version()'], 'only the schema-version probe is public');
   const internal = await api.q(`select p.oid::regprocedure::text sig from pg_proc p join pg_namespace n on n.oid=p.pronamespace

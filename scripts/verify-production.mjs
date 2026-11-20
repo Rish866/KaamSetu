@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Read-only production verification. Uses only public information (the publishable key shipped in the website bundle).
 // Never signs in, never writes. Prints a JSON report; exits non-zero if any REQUIRED check fails.
-//   node scripts/verify-production.mjs [--expect-schema 202611200004] [--site https://www.getkaamsetu.in]
+//   node scripts/verify-production.mjs [--expect-schema 202611200005] [--site https://www.getkaamsetu.in]
 const args = Object.fromEntries(process.argv.slice(2).reduce((acc, a, i, all) => (a.startsWith('--') ? [...acc, [a.slice(2), all[i + 1]]] : acc), []));
 const sites = (args.site ? [args.site] : ['https://www.getkaamsetu.in', 'https://getkaamsetu.in']);
 const expectSchema = args['expect-schema'] ?? null;

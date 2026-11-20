@@ -102,9 +102,9 @@ jobs:
           W=$(mktemp -d); mkdir -p "$W/supabase/migrations"; cp supabase/config.toml "$W/supabase/"; cp -r supabase/.temp "$W/supabase/" 2>/dev/null || true
           for v in $applied; do cp supabase/migrations/${v}_*.sql "$W/supabase/migrations/"; done
           ls "$W/supabase/migrations"
-          supabase db diff --linked --workdir "$W" --schema public,private | tee drift.sql
-          if grep -qiE '^(create|alter|drop|grant|revoke|comment)' drift.sql; then echo "::error::Production schema differs from its applied migrations (see drift.sql above)"; exit 1; fi
-          echo "No schema drift in public/private relative to the applied migrations."
+          supabase db diff --linked --workdir "$W" --schema public,private > drift.sql
+          cat drift.sql
+          node scripts/classify-drift.mjs drift.sql
 
       - name: Pre-flight data checks (read-only)
         if: inputs.action != 'checks' && inputs.action != 'functions'
@@ -172,7 +172,7 @@ jobs:
           node-version: 22
       - name: Public API verification (anonymous, read-only)
         if: inputs.action == 'apply' || inputs.action == 'checks'
-        run: node scripts/verify-production.mjs --expect-schema 202611200004 || echo "::warning::Public verification reported failures (expected until the v1.4.0 website is deployed)."
+        run: node scripts/verify-production.mjs --expect-schema 202611200005 || echo "::warning::Public verification reported failures (expected until the v1.4.0 website is deployed)."
 
       - name: Deploy Edge Functions and set worker secret
         if: inputs.action == 'functions'

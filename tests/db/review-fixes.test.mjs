@@ -24,13 +24,13 @@ test('upgrade path: v1.3.0 production state migrates cleanly and keeps data', { 
   await old.as(cand, (s) => s('insert into public.candidate_profiles (user_id) values ($1)', [cand.id]));
   assert.equal((await old.q('select verification_status s from public.companies where id=$1', [cid])).rows[0].s, 'pending');
   await old.applyMigrations();
-  assert.equal(old.applied.at(-1), '202611200004_review_fixes.sql');
+  assert.equal(old.applied.at(-1), '202611200005_production_parity.sql');
   assert.equal((await old.q('select verification_status s from public.companies where id=$1', [cid])).rows[0].s, 'draft', 'legacy pending company returns to draft');
   await old.as(emp, (s) => s(`select public.submit_company_verification($1,'domain','legacy.example')`, [cid]));
   assert.equal((await old.q('select count(*)::int n from public.notification_preferences')).rows[0].n, 2, 'preferences backfilled');
   const access = await old.as(cand, async (s) => (await s('select * from public.current_user_access()')).rows[0]);
   assert.deepEqual([access.account_kind, access.is_admin, access.status], ['candidate', false, 'active'], 'v1.3.0 password-auth RPC still works');
-  assert.equal((await old.as(null, async (s) => (await s('select public.schema_version() v')).rows[0].v)), '202611200004');
+  assert.equal((await old.as(null, async (s) => (await s('select public.schema_version() v')).rows[0].v)), '202611200005');
 });
 
 test('migrations are not re-runnable by accident: a second apply of 0004 fails loudly rather than silently', { skip: REAL && 'would mutate the shared real database' }, async () => {
@@ -229,4 +229,16 @@ test('hard-deleting an auth user with consent history is refused (accounts must 
   assert.ok((await api.q('select count(*)::int n from public.consent_records where user_id=$1', [c.id])).rows[0].n >= 1);
   assert.match(await failure(api.q('delete from auth.users where id=$1', [c.id])) ?? '', /immutable/);
   assert.equal((await api.q('select count(*)::int n from public.profiles where id=$1', [c.id])).rows[0].n, 1);
+});
+
+test('service_role has least privilege: no direct table access except reading the skill taxonomy; worker RPCs still work', async () => {
+  // Mirrors production's restricted defaults (drift check, Actions run 44803878681).
+  assert.ok((await api.asService((s) => s('select name from public.skills where active limit 1'))).rows.length === 1);
+  for (const t of ['profiles', 'candidate_profiles', 'applications', 'resumes', 'consent_records', 'jobs', 'companies'])
+    assert.match(await failure(api.asService((s) => s(`select * from public.${t} limit 1`))) ?? '', /permission denied/, t);
+  assert.match(await failure(api.asService((s) => s(`update public.skills set active = false`))) ?? '', /permission denied/);
+  assert.ok(Array.isArray((await api.asService((s) => s('select * from public.outbox_claim(1)'))).rows));
+  assert.ok(Array.isArray((await api.asService((s) => s('select * from public.resume_work_claim(1)'))).rows));
+  for (const t of ['app_roles', 'audit_events', 'company_verifications', 'email_outbox'])
+    assert.equal((await api.q(`select relrowsecurity r from pg_class where oid = 'private.${t}'::regclass`)).rows[0].r, true, `RLS on private.${t}`);
 });
