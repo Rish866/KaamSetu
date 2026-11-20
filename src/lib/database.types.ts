@@ -879,6 +879,8 @@ export type Database = {
       respond_to_invitation: { Args: Record<string, unknown>; Returns: unknown };
       /** (p_invitation uuid) => void */
       revoke_company_invitation: { Args: Record<string, unknown>; Returns: unknown };
+      /** () => event_trigger */
+      rls_auto_enable: { Args: Record<string, unknown>; Returns: unknown };
       /** () => text */
       schema_version: { Args: Record<string, unknown>; Returns: unknown };
       /** (p_job uuid, p_skill text DEFAULT NULL::text, p_city text DEFAULT NULL::text, p_min_months integer DEFAULT NULL::integer, p_max_months integer DEFAULT NULL::integer, p_max_salary integer DEFAULT NULL::integer, p_limit integer DEFAULT 25) => TABLE(candidate_id uuid, headline text, city text, locality text, experience_months integer, expected_salary integer, salary_period text, notice_days integer, skills text[], score numeric, match jsonb) */

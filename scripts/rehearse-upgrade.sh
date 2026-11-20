@@ -26,6 +26,10 @@ supabase migration up --workdir "$W"
 supabase migration list --workdir "$W"
 psql "$DB" -v ON_ERROR_STOP=1 -f scripts/rehearsal/v140-assertions.sql
 psql "$DB" -v ON_ERROR_STOP=1 -f scripts/production-checks.sql
-# Event trigger still works after the migrations, and new public tables still get RLS automatically.
-psql "$DB" -v ON_ERROR_STOP=1 -c "create table public.rehearsal_probe (id int)" -c "select relrowsecurity from pg_class where relname = 'rehearsal_probe'" -c "drop table public.rehearsal_probe"
+# Supabase-managed DDL must still work after the migrations: the ensure_rls event trigger fires for every role's DDL,
+# so its function must stay executable (a revoked PUBLIC EXECUTE would break Auth/Storage platform upgrades).
+SA="${DB/postgres:postgres@/supabase_admin:postgres@}"
+psql "$SA" -v ON_ERROR_STOP=1 -c "set role supabase_storage_admin" -c "create table storage.rehearsal_probe (id int)" -c "drop table storage.rehearsal_probe"
+psql "$SA" -v ON_ERROR_STOP=1 -c "set role supabase_auth_admin" -c "create table auth.rehearsal_probe (id int)" -c "drop table auth.rehearsal_probe"
+psql "$DB" -v ON_ERROR_STOP=1 -c "create table public.rehearsal_probe (id int)" -c "select relname, relrowsecurity from pg_class where relname = 'rehearsal_probe'" -c "drop table public.rehearsal_probe"
 supabase stop --no-backup --workdir "$W"

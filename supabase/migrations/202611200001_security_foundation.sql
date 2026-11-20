@@ -1168,6 +1168,8 @@ begin
   for r in
     select p.oid::regprocedure as sig from pg_proc p join pg_namespace n on n.oid = p.pronamespace
     where n.nspname = 'public' and p.prokind = 'f'
+      -- Never touch event-trigger functions (e.g. Supabase's rls_auto_enable): revoking PUBLIC EXECUTE breaks DDL by other roles.
+      and p.prorettype <> 'event_trigger'::regtype
       and not exists (select 1 from pg_depend d where d.objid = p.oid and d.deptype = 'e')
   loop
     execute format('revoke all on function %s from public, anon, authenticated', r.sig);

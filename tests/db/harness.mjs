@@ -41,6 +41,8 @@ grant execute on function storage.foldername(text) to anon, authenticated;
 grant select, insert, update, delete on storage.objects to authenticated;
 grant select on storage.buckets to authenticated;
 grant select, insert, update, delete on storage.objects to service_role;
+-- Production carries a Supabase-managed event-trigger function in public owned by postgres (Actions run 44807025417).
+create function public.rls_auto_enable() returns event_trigger language plpgsql as $$ begin end $$;
 -- Mimic Supabase defaults: new public tables/functions are open to all API roles, including service_role.
 alter default privileges for role postgres in schema public grant all on tables to anon, authenticated, service_role;
 alter default privileges for role postgres in schema public grant execute on functions to anon, authenticated, service_role;

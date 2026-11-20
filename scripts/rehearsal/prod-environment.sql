@@ -1,8 +1,7 @@
 -- Recreates, on a throw-away LOCAL database, the production environment differences found by the drift check
 -- (Actions run 44803878681): Supabase's restricted default privileges for API roles, the Supabase-managed
 -- public.rls_auto_enable() event trigger (owned by supabase_admin, not postgres), and RLS on private tables.
--- Must run as supabase_admin, BEFORE the v1.3.0 migrations would have run in production... applied here before
--- the pending migrations, which is the state production is in today.
+-- Must run as supabase_admin, before the pending migrations: that is the state production is in today.
 \set ON_ERROR_STOP on
 alter default privileges for role postgres in schema public revoke all on tables from anon, authenticated, service_role;
 alter default privileges for role postgres in schema public grant maintain, references, trigger, truncate on tables to anon, authenticated, service_role;
@@ -25,8 +24,10 @@ begin
     end if;
   end loop;
 end $function$;
--- As in production: owned by supabase_admin, no explicit grants to API roles; PUBLIC keeps the default EXECUTE.
+-- As in production (Actions run 44807025417): function and event trigger owned by postgres; PUBLIC keeps the default EXECUTE.
+alter function public.rls_auto_enable() owner to postgres;
 revoke all on function public.rls_auto_enable() from anon, authenticated, service_role;
 drop event trigger if exists ensure_rls;
 create event trigger ensure_rls on ddl_command_end execute function public.rls_auto_enable();
+alter event trigger ensure_rls owner to postgres;
 select 'production environment emulated' as step, (select usename from pg_user u join pg_proc p on p.proowner = u.usesysid where p.proname = 'rls_auto_enable') as rls_auto_enable_owner;
