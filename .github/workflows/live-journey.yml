@@ -86,6 +86,13 @@ jobs:
           LIVE_SUPABASE_ANON_KEY: sb_publishable_40DBVbkTYmqzhoRHeLsfbQ_9qTIj_4X # public key, shipped in the website bundle
         run: npx playwright test --config e2e/live/playwright.live.config.ts
 
+      - name: Clean up QA data (always; through the product's audited functions)
+        if: always() && steps.admin.outputs.temporary == 'true'
+        env:
+          DB_URL: ${{ env.TMP_DB }}
+          ADMIN_ID: ${{ env.TMP_ADMIN_ID }}
+        run: bash scripts/qa-cleanup.sh
+
       - name: Remove the temporary QA administrator
         if: always() && steps.admin.outputs.temporary == 'true'
         run: |

@@ -94,8 +94,15 @@ test('9-10. employer creates a job; admin approves it', async () => {
 
 test('11-12. candidate searches, sees an explainable match and applies', async () => {
   await c.goto(`${env.base}/candidate`);
-  await c.getByRole('textbox', { name: /Search title/ }).fill(jobTitle);
-  await btn(c, 'Search').click();
+  await c.waitForLoadState('networkidle');
+  // Pages are pre-rendered HTML; typing before the app has hydrated can be wiped. Retry the search until the job shows.
+  await expect(async () => {
+    const box = c.getByRole('textbox', { name: /Search title/ });
+    await box.fill(jobTitle);
+    await expect(box).toHaveValue(jobTitle);
+    await btn(c, 'Search').click();
+    await expect(card(c, jobTitle, 'View details')).toBeVisible({ timeout: 5_000 });
+  }).toPass({ timeout: 45_000 });
   await inCard(c, jobTitle, 'View details');
   await expect(c.getByText(/Why this is a \d+% match/)).toBeVisible({ timeout: 20_000 });
   await expect(c.getByText(/Matches 2 of 2 listed skills/)).toBeVisible();
