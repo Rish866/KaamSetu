@@ -30,7 +30,19 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       site: ${{ steps.base.outputs.site }}
+      enabled: ${{ steps.enabled.outputs.enabled }}
     steps:
+      - name: Is GitHub Pages switched on for this repository?
+        id: enabled
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh api "repos/$GITHUB_REPOSITORY/pages" --jq .build_type > pages.txt 2>/dev/null; then
+            echo "Pages is on (source: $(cat pages.txt))."; echo "enabled=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::notice::GitHub Pages is not switched on yet. Owner: Settings > Pages > Source: GitHub Actions, then rerun this workflow. Building only."
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+          fi
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
@@ -61,11 +73,13 @@ jobs:
           touch dist/.nojekyll
           if [ -n "$CUSTOM_DOMAIN" ]; then echo "$CUSTOM_DOMAIN" > dist/CNAME; fi
       - uses: actions/upload-pages-artifact@v3
+        if: steps.enabled.outputs.enabled == 'true'
         with:
           path: dist
 
   deploy:
     needs: build
+    if: needs.build.outputs.enabled == 'true'
     runs-on: ubuntu-latest
     environment:
       name: github-pages
