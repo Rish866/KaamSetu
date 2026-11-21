@@ -33,6 +33,16 @@ db="postgresql://postgres:postgres@127.0.0.1:54322/postgres"
 } > "$work/default-privileges.sql"
 echo "default-privilege statements applied before the schema: $(wc -l < "$work/default-privileges.sql")"
 
+# COPY dumps contain a block for every table, including empty Supabase-managed ones the project's postgres role may not
+# write to (e.g. storage.buckets_vectors: "permission denied"). Empty blocks restore nothing, so drop them.
+awk '
+  /^COPY / { hdr=$0; buf=""; n=0; inblk=1; next }
+  inblk && /^\\\.$/ { if (n > 0) { print hdr; printf "%s", buf; print "\\." } else { skipped++ } inblk=0; next }
+  inblk { buf = buf $0 "\n"; n++; next }
+  { print }
+  END { print "-- empty COPY blocks dropped: " skipped+0 > "/dev/stderr" }' "$work/data.sql" > "$work/data-nonempty.sql"
+mv "$work/data-nonempty.sql" "$work/data.sql"
+
 # Then Supabase's documented sequence (supabase.com/docs/guides/platform/migrating-within-supabase/backup-restore).
 psql "$db" --quiet --single-transaction --variable ON_ERROR_STOP=1 \
   --file "$work/roles.sql" --file "$work/default-privileges.sql" --file "$work/schema.sql" \
