@@ -17,7 +17,7 @@ import { Card, Logo, Pill, PrimaryButton } from '../components/ui';
 import { supabase } from '../lib/supabase';
 import { NOTICE_VERSION } from '../content/legal';
 import { validatePassword } from '../lib/password';
-import { useAuthMethods } from '../lib/platform';
+import { useAuthMethods, webBasePath } from '../lib/platform';
 import { AccountKind, useAuth } from '../state/AuthContext';
 import { colors } from '../theme';
 
@@ -154,7 +154,7 @@ export default function LoginScreen() {
     setBusy(true);
     setMessage(null);
     const webOrigin = Platform.OS === 'web' && typeof globalThis.location?.origin === 'string' ? globalThis.location.origin : null;
-    const redirectTo = webOrigin ? `${webOrigin}/reset-password` : Linking.createURL('/reset-password');
+    const redirectTo = webOrigin ? `${webOrigin}${webBasePath}/reset-password` : Linking.createURL('/reset-password');
     const { error } = await supabase.auth.resetPasswordForEmail(normalizedEmail, { redirectTo });
     setBusy(false);
     setMessage(error ? authMessage(error.message) : 'If this email is registered, a secure password-reset link has been sent.');

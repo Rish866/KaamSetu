@@ -27,3 +27,9 @@ export function usePlatformFlags() {
   }, []);
   return flags;
 }
+
+/**
+ * Path prefix the website is hosted under ('' at the domain root, '/KaamSetu' on GitHub Pages project sites).
+ * Set at export time from app.json `experiments.baseUrl`; Expo Router uses the same value for links.
+ */
+export const webBasePath = (process.env.EXPO_BASE_URL ?? '').replace(/\/+$/, '');

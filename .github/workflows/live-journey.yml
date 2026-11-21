@@ -53,7 +53,8 @@ jobs:
           set -euo pipefail
           # Public (publishable) key, read from the deployed website bundle rather than stored in the repository.
           site="${{ inputs.base_url }}"
-          pk=$(for f in $(curl -sS "$site/" | grep -oE '/_expo/static/js/web/[^"]+\.js' | sort -u); do curl -sS "$site$f"; done | grep -oE 'sb_publishable_[A-Za-z0-9_-]{10,}' | head -1)
+          origin=$(echo "$site" | grep -oE '^https?://[^/]+')
+          pk=$(for f in $(curl -sS "$site/" | grep -oE 'src="[^"]*/_expo/static/js/web/[^"]+\.js"' | sed -E 's/^src="|"$//g' | sort -u); do curl -sS "$origin$f"; done | grep -oE 'sb_publishable_[A-Za-z0-9_-]{10,}' | head -1)
           [ -n "$pk" ] || { echo "::error::Could not read the publishable key from $site"; exit 1; }
           echo "LIVE_SUPABASE_ANON_KEY=$pk" >> "$GITHUB_ENV"
           if [ -n "$OWNER_ADMIN_EMAIL" ] && [ -n "$OWNER_ADMIN_PASSWORD" ]; then

@@ -10,7 +10,8 @@ const check = (name, ok, detail, required = true) => report.checks.push({ name, 
 
 async function bundleOf(site) {
   const html = await (await fetch(site, { redirect: 'follow' })).text();
-  const scripts = [...new Set(html.match(/\/_expo\/static\/js\/web\/[^"]+\.js/g) ?? [])];
+  // Full src values, so a site hosted under a sub-path (/KaamSetu/_expo/...) resolves correctly.
+  const scripts = [...new Set([...html.matchAll(/src="([^"]*\/_expo\/static\/js\/web\/[^"]+\.js)"/g)].map((m) => m[1]))];
   const js = (await Promise.all(scripts.map(async (s) => (await fetch(new URL(s, site))).text()))).join('\n');
   return { html, js, scripts };
 }
@@ -28,7 +29,7 @@ const demo = ['HarbourCloud', 'KiteRoute', 'BlueMango', 'Private prototype', 'Ca
 check('deployed website contains no demo data strings', demo.length === 0, { found: demo });
 // Every static asset referenced by the entry bundles (icon fonts, images) must actually be served. On 2026-11-21 the
 // host dropped assets/node_modules/** and every icon font returned 404.
-const assets = [...new Set(js.match(/\/assets\/[^"'\s]+\.(?:ttf|otf|woff2?|png|jpe?g|svg|gif|webp)/g) ?? [])];
+const assets = [...new Set([...js.matchAll(/["']((?:\/[^"'\s]*?)?\/assets\/[^"'\s]+\.(?:ttf|otf|woff2?|png|jpe?g|svg|gif|webp))["']/g)].map((m) => m[1]))];
 const missing = [];
 for (const a of assets) { const r = await fetch(new URL(a, sites[0])); if (r.status !== 200) missing.push(`${r.status} ${a}`); await r.arrayBuffer().catch(() => null); }
 check('every asset referenced by the website bundle is served', assets.length > 0 && missing.length === 0, { referenced: assets.length, missing: missing.slice(0, 10) }, !args['assets-optional']);
