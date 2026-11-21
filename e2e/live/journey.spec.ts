@@ -119,6 +119,8 @@ test('13-15. employer views and shortlists; contact stays hidden until the candi
   await inCard(e, jobTitle, 'Applicants');
   await expect(e.getByText(cand.name)).toBeVisible({ timeout: 20_000 });
   await btn(e, 'Mark viewed').click();
+  // Wait for the first transition: applied -> shortlisted is also allowed, so a fast second click can skip "Viewed".
+  await expect(e.getByText(/moved to Viewed/)).toBeVisible();
   await btn(e, 'Shortlist').click();
   await expect(e.getByText(/moved to Shortlisted/)).toBeVisible();
   await btn(e, 'View contact details').click();
