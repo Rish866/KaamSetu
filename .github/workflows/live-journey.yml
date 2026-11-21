@@ -82,6 +82,8 @@ jobs:
       - name: Real UI journey
         env:
           LIVE_BASE_URL: ${{ inputs.base_url }}
+          LIVE_SUPABASE_URL: ${{ env.SUPABASE_URL }}
+          LIVE_SUPABASE_ANON_KEY: sb_publishable_40DBVbkTYmqzhoRHeLsfbQ_9qTIj_4X # public key, shipped in the website bundle
         run: npx playwright test --config e2e/live/playwright.live.config.ts
 
       - name: Remove the temporary QA administrator
