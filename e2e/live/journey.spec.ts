@@ -34,6 +34,8 @@ test('2. candidate completes the profile', async () => {
   await c.getByRole('button', { name: 'Thane', exact: true }).first().click();
   await btn(c, 'Save profile').click();
   await expect(c.getByText('Profile saved.')).toBeVisible();
+  // Builds before 2026-11-21 show "Profile saved." before the reload that resets the form; let it finish first.
+  await c.waitForLoadState('networkidle');
   for (const s of ['CRM', 'Customer support', 'English']) await c.getByRole('button', { name: s, exact: true }).last().click();
   await btn(c, 'Save skills').click();
   await expect(c.getByText('Skills saved.')).toBeVisible();
