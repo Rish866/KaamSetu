@@ -11,14 +11,14 @@ pass, but the items marked **Blocker** below must be closed first. Each blocker 
 | B2 | Email delivery | No password-reset, invitation or notification email reaches anyone; team invitations cannot be accepted | **Owner**: Resend account, verified domain, GitHub secret `RESEND_API_KEY` (OWNER_ACTIONS step 5). Then engineer runs `email-setup` and a delivery test | A real reset email arrives at the QA mailbox |
 | ~~B3~~ | ~~End-to-end journey on the live site~~ **Closed 2026-11-21** | Passed in production: 24/24 (14 journey steps + 10 sign-in/security tests), QA data cleaned up afterwards | Engineer | [run 44873263273](https://github.com/Rish866/KaamSetu/actions/runs/44873263273) |
 | B4 | Legal texts are drafts | Privacy notice, terms and consent wording under the DPDP Act need a lawyer's approval before real personal data is collected at scale | **Owner** + lawyer (step 7) | Lawyer's written sign-off; drafts banner removed |
-| B5 | Support and privacy mailboxes | The privacy notice and app point users to `support@` and `privacy@getkaamsetu.in` | **Owner** (step 7) | A test mail to each is received |
+| B5 | Support and privacy mailboxes | The privacy notice and app point users to `support@` and `privacy@getkaamsetu.in`, but the domain has **no MX records**, so mail to them bounces today | **Owner**: Zoho Mail Forever Free (up to 5 mailboxes, $0) with its MX/SPF/DKIM records at GoDaddy | A test mail to each is received |
 
 ## Should be done before inviting users (not hard blockers)
 
 | Item | Who | Notes |
 |------|-----|-------|
 | Resume uploads | Engineer + an admin | Off by design. After B3: upload a test PDF as the QA candidate with uploads on, confirm the ClamAV worker marks it `clean`, then leave uploads on. Decide with the lawyer whether GitHub runners may process resumes |
-| HSTS and canonical redirect | **Owner** (Cloudflare) | Sites ignores `_headers`. Turn on HSTS; 301 apex → www; 301 for HTTP → HTTPS |
+| HSTS and canonical redirect | OpenAI Sites (host) | DNS is at GoDaddy (`domaincontrol.com`); `www` points to `custom-domains.chatgpt.site`, so the Cloudflare in front belongs to the host, not to us. The host ignores `_headers`. Only the host can add HSTS/redirects; ask its support. The CSP `<meta>` tag still applies |
 | Supabase plan / PITR | **Owner** | Free plan has no daily backups or PITR. The `backup` action and restore drill work, but they are manual |
 | Error monitoring | **Owner** decision | Sentry is not installed (a new data processor, needs legal review) |
 | Live-site cut-over to a restored project | Engineer | The restore itself is rehearsed (docs/drills.md); repointing the site and workflows is not |
