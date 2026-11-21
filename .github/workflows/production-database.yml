@@ -125,7 +125,7 @@ jobs:
           set -euo pipefail
           stamp=$(date -u +%Y%m%dT%H%M%SZ); mkdir -p backup
           supabase db dump --linked --password "$SUPABASE_DB_PASSWORD" -f "backup/$stamp-schema.sql"
-          supabase db dump --linked --password "$SUPABASE_DB_PASSWORD" --data-only -f "backup/$stamp-data.sql"
+          supabase db dump --linked --password "$SUPABASE_DB_PASSWORD" --data-only --use-copy -f "backup/$stamp-data.sql"
           supabase db dump --linked --password "$SUPABASE_DB_PASSWORD" --role-only -f "backup/$stamp-roles.sql"
           for f in backup/*.sql; do
             echo "$BACKUP_PASSPHRASE" | gpg --batch --yes --pinentry-mode loopback --passphrase-fd 0 --symmetric --cipher-algo AES256 -o "$f.gpg" "$f"

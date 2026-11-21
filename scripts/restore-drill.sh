@@ -21,9 +21,21 @@ echo "backup: $(basename "$(ls "$dir"/*-schema.sql.gpg | head -1)" -schema.sql.g
 mkdir -p "$work/project" && cd "$work/project" && supabase init --force >/dev/null && supabase db start
 db="postgresql://postgres:postgres@127.0.0.1:54322/postgres"
 
-# Supabase's documented sequence (supabase.com/docs/guides/platform/migrating-within-supabase/backup-restore).
+# Default privileges FIRST. A new Supabase project grants ALL on new tables, functions and sequences to anon,
+# authenticated and service_role; pg_dump only records grants relative to Postgres' built-in defaults and writes its
+# ALTER DEFAULT PRIVILEGES at the end. Restored without this step, anon could execute every admin and worker function
+# (found by the first drill, run 44867383491). Supabase documents the same requirement under `supabase db dump`.
+{
+  for kind in TABLES FUNCTIONS SEQUENCES; do
+    echo "ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public REVOKE ALL ON $kind FROM anon, authenticated, service_role;"
+  done
+  grep -E '^ALTER DEFAULT PRIVILEGES FOR ROLE "postgres"' "$work/schema.sql" || true
+} > "$work/default-privileges.sql"
+echo "default-privilege statements applied before the schema: $(wc -l < "$work/default-privileges.sql")"
+
+# Then Supabase's documented sequence (supabase.com/docs/guides/platform/migrating-within-supabase/backup-restore).
 psql "$db" --quiet --single-transaction --variable ON_ERROR_STOP=1 \
-  --file "$work/roles.sql" --file "$work/schema.sql" \
+  --file "$work/roles.sql" --file "$work/default-privileges.sql" --file "$work/schema.sql" \
   --command 'SET session_replication_role = replica' --file "$work/data.sql" >/dev/null
 restored=$(date +%s)
 
@@ -36,13 +48,14 @@ awk '
   inblk                    { n[t]++; next }
   /^INSERT INTO /          { t=$3; n[t]++ }
   END                      { for (k in n) print k" "n[k] }' "$work/data.sql" | sort > "$work/expected.txt"
+grep -q '^COPY ' "$work/data.sql" || { echo "::error::This backup was written with INSERT statements, so its row counts cannot be checked exactly. Take a new backup (backups now use --use-copy) and rerun the drill."; exit 1; }
 fail=0; tables=0; rows=0
 while read -r t n; do
   got=$(psql "$db" -At -c "select count(*) from $t")
   tables=$((tables+1)); rows=$((rows+n))
   if [ "$got" != "$n" ]; then echo "MISMATCH $t backup=$n restored=$got"; fail=1; fi
 done < "$work/expected.txt"
-echo "tables with data in backup: $tables, rows: $rows, mismatches: $fail"
+echo "tables with data in backup: $tables, rows: $rows, all counts equal: $([ $fail = 0 ] && echo yes || echo NO)"
 grep -E '^"?(public|auth)"?\.' "$work/expected.txt" | grep -E 'profiles|companies|jobs|applications|resumes|consent_records|users' | sed 's/^/  /' || true
 
 sv=$(psql "$db" -At -c "select public.schema_version()" 2>/dev/null || echo missing)
