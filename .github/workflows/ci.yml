@@ -177,6 +177,8 @@ jobs:
             || echo "::warning::App source on main is ahead of $tag. The rollback package is main, which is correct only if the live site was deployed from the current main (check the deploy log in docs/AUDIT.md)."
       - name: Package
         working-directory: base
+        env:
+          ALLOW_NODE_MODULES_ASSETS: 1
         run: bash ../head/scripts/package-website.sh "rollback-${{ github.event.pull_request.base.sha }}" none
       - uses: actions/upload-artifact@v4
         with:
