@@ -105,7 +105,8 @@ jobs:
         run: |
           set -euo pipefail
           # Pages caches pages for up to 10 minutes; a query string bypasses the cached copy.
-          served() { curl -sSL "$SITE/?v=$GITHUB_SHA-$RANDOM" | grep -q "content=\"$GITHUB_SHA\""; }
+          # Read the whole page first: `curl | grep -q` fails under pipefail when grep stops reading early.
+          served() { local page; page=$(curl -sSL "$SITE/?v=$GITHUB_SHA-$RANDOM") || return 1; [[ "$page" == *"content=\"$GITHUB_SHA\""* ]]; }
           for i in $(seq 1 40); do served && break; echo "waiting for Pages to serve $GITHUB_SHA"; sleep 15; done
           served || { echo "::error::$SITE does not serve build $GITHUB_SHA"; exit 1; }
           node scripts/verify-production.mjs --site "$SITE" --expect-schema 202611200006
