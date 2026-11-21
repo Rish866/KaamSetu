@@ -2,8 +2,8 @@ name: Website on GitHub Pages
 
 # Builds the website from main and publishes it on GitHub Pages, so the site can be deployed without the
 # OpenAI Sites account. Without a custom domain it lives at https://rish866.github.io/KaamSetu/ (sub-path build).
-# To serve it on getkaamsetu.in instead: set repository variable PAGES_CUSTOM_DOMAIN=www.getkaamsetu.in, point the
-# domain's DNS at GitHub Pages (docs/OWNER_ACTIONS.md), and rerun this workflow (root-path build + CNAME file).
+# To serve it on getkaamsetu.in: Settings > Pages > Custom domain = www.getkaamsetu.in, point DNS at GitHub Pages
+# (docs/OWNER_ACTIONS.md), rerun this workflow: it then builds for the domain root.
 on:
   push:
     branches: [main]
@@ -23,7 +23,7 @@ env:
   EXPO_PUBLIC_SUPABASE_URL: ${{ vars.EXPO_PUBLIC_SUPABASE_URL }}
   EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${{ vars.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY }}
   EXPO_PUBLIC_BUILD_SHA: ${{ github.sha }}
-  CUSTOM_DOMAIN: ${{ vars.PAGES_CUSTOM_DOMAIN }}
+  CUSTOM_DOMAIN: ${{ vars.PAGES_CUSTOM_DOMAIN }} # optional override; normally read from Settings > Pages
 
 jobs:
   build:
@@ -37,8 +37,11 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          if gh api "repos/$GITHUB_REPOSITORY/pages" --jq .build_type > pages.txt 2>/dev/null; then
-            echo "Pages is on (source: $(cat pages.txt))."; echo "enabled=true" >> "$GITHUB_OUTPUT"
+          if gh api "repos/$GITHUB_REPOSITORY/pages" > pages.json 2>/dev/null; then
+            echo "Pages is on (source: $(jq -r .build_type pages.json), custom domain: $(jq -r '.cname // "none"' pages.json))."
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+            # The custom domain set in Settings > Pages decides the build: root path for the domain, sub-path otherwise.
+            cname=$(jq -r '.cname // empty' pages.json); if [ -n "$cname" ]; then echo "CUSTOM_DOMAIN=$cname" >> "$GITHUB_ENV"; fi
           else
             echo "::notice::GitHub Pages is not switched on yet. Owner: Settings > Pages > Source: GitHub Actions, then rerun this workflow. Building only."
             echo "enabled=false" >> "$GITHUB_OUTPUT"
@@ -101,6 +104,8 @@ jobs:
           SITE: ${{ needs.build.outputs.site }}
         run: |
           set -euo pipefail
-          for i in $(seq 1 20); do curl -sS "$SITE/" | grep -q "content=\"$GITHUB_SHA\"" && break; echo "waiting for Pages to serve $GITHUB_SHA"; sleep 15; done
-          curl -sS "$SITE/" | grep -q "content=\"$GITHUB_SHA\"" || { echo "::error::$SITE does not serve build $GITHUB_SHA"; exit 1; }
+          # Pages caches pages for up to 10 minutes; a query string bypasses the cached copy.
+          served() { curl -sSL "$SITE/?v=$GITHUB_SHA-$RANDOM" | grep -q "content=\"$GITHUB_SHA\""; }
+          for i in $(seq 1 40); do served && break; echo "waiting for Pages to serve $GITHUB_SHA"; sleep 15; done
+          served || { echo "::error::$SITE does not serve build $GITHUB_SHA"; exit 1; }
           node scripts/verify-production.mjs --site "$SITE" --expect-schema 202611200006
