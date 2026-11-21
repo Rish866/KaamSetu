@@ -2,7 +2,7 @@
 // Read-only production verification. Uses only public information (the publishable key shipped in the website bundle).
 // Never signs in, never writes. Prints a JSON report; exits non-zero if any REQUIRED check fails.
 //   node scripts/verify-production.mjs [--expect-schema 202611200006] [--site https://www.getkaamsetu.in]
-const args = Object.fromEntries(process.argv.slice(2).reduce((acc, a, i, all) => (a.startsWith('--') ? [...acc, [a.slice(2), all[i + 1]]] : acc), []));
+const args = Object.fromEntries(process.argv.slice(2).reduce((acc, a, i, all) => (a.startsWith('--') ? [...acc, [a.slice(2), all[i + 1]?.startsWith('--') ? true : all[i + 1] ?? true]] : acc), []));
 const sites = (args.site ? [args.site] : ['https://www.getkaamsetu.in', 'https://getkaamsetu.in']);
 const expectSchema = args['expect-schema'] ?? null;
 const report = { started_at: new Date().toISOString(), checks: [] };
@@ -31,7 +31,7 @@ check('deployed website contains no demo data strings', demo.length === 0, { fou
 const assets = [...new Set(js.match(/\/assets\/[^"'\s]+\.(?:ttf|otf|woff2?|png|jpe?g|svg|gif|webp)/g) ?? [])];
 const missing = [];
 for (const a of assets) { const r = await fetch(new URL(a, sites[0])); if (r.status !== 200) missing.push(`${r.status} ${a}`); await r.arrayBuffer().catch(() => null); }
-check('every asset referenced by the website bundle is served', assets.length > 0 && missing.length === 0, { referenced: assets.length, missing: missing.slice(0, 10) });
+check('every asset referenced by the website bundle is served', assets.length > 0 && missing.length === 0, { referenced: assets.length, missing: missing.slice(0, 10) }, !args['assets-optional']);
 check('page has a <title>', /<title>[^<]+<\/title>/.test(html), {}, false);
 check('page has a Content-Security-Policy meta tag', /Content-Security-Policy/.test(html), {}, false);
 
