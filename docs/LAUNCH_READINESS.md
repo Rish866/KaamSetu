@@ -7,7 +7,7 @@ pass, but the items marked **Blocker** below must be closed first. Each blocker 
 
 | # | Item | Why it blocks | Who | How it is verified |
 |---|------|---------------|-----|--------------------|
-| B1 | Icons missing on the live site (`/assets/node_modules/**` 404) | Every screen shows blank or broken icons; looks broken to users | Engineer: PR #5 (done, awaiting merge). **Owner**: redeploy the website from `main` | `Production database` → `checks`: "every asset referenced by the website bundle is served" passes |
+| ~~B1~~ | ~~Icons missing~~ **Closed 2026-11-21** | Site moved to GitHub Pages; all assets served | Engineer + owner | `verify-production.mjs` asset check passes |
 | B2 | Email delivery | No password-reset, invitation or notification email reaches anyone; team invitations cannot be accepted | **Owner**: Resend account, verified domain, GitHub secret `RESEND_API_KEY` (OWNER_ACTIONS step 5). Then engineer runs `email-setup` and a delivery test | A real reset email arrives at the QA mailbox |
 | ~~B3~~ | ~~End-to-end journey on the live site~~ **Closed 2026-11-21** | Passed in production: 24/24 (14 journey steps + 10 sign-in/security tests), QA data cleaned up afterwards | Engineer | [run 44873263273](https://github.com/Rish866/KaamSetu/actions/runs/44873263273) |
 | B4 | Legal texts are drafts | Privacy notice, terms and consent wording under the DPDP Act need a lawyer's approval before real personal data is collected at scale | **Owner** + lawyer (step 7) | Lawyer's written sign-off; drafts banner removed |
@@ -18,7 +18,7 @@ pass, but the items marked **Blocker** below must be closed first. Each blocker 
 | Item | Who | Notes |
 |------|-----|-------|
 | Resume uploads | Engineer + an admin | Off by design. After B3: upload a test PDF as the QA candidate with uploads on, confirm the ClamAV worker marks it `clean`, then leave uploads on. Decide with the lawyer whether GitHub runners may process resumes |
-| HSTS and canonical redirect | OpenAI Sites (host) | DNS is at GoDaddy (`domaincontrol.com`); `www` points to `custom-domains.chatgpt.site`, so the Cloudflare in front belongs to the host, not to us. The host ignores `_headers`. Only the host can add HSTS/redirects; ask its support. The CSP `<meta>` tag still applies |
+| Canonical redirect and HTTPS | **Done** | GitHub Pages: apex → www 301, HTTP → HTTPS 301, certificate auto-renewed. GitHub Pages does not send an HSTS header and does not support custom headers; the CSP `<meta>` tag applies |
 | Supabase plan / PITR | **Owner** | Free plan has no daily backups or PITR. The `backup` action and restore drill work, but they are manual |
 | Error monitoring | **Owner** decision | Sentry is not installed (a new data processor, needs legal review) |
 | Live-site cut-over to a restored project | Engineer | The restore itself is rehearsed (docs/drills.md); repointing the site and workflows is not |

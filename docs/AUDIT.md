@@ -3,12 +3,12 @@
 Single source of truth for what is written, tested, merged, deployed and blocked. Feature-level detail: docs/TRACEABILITY.md.
 Status words: Written → Locally tested → CI tested → Merged → Deployed → Production tested → Store published; Externally blocked.
 
-## Current state (2026-11-21 05:00 UTC)
+## Current state (2026-11-21 15:20 UTC)
 | Item | State | Evidence |
 |---|---|---|
 | PR #3 (v1.4.0) | **Merged** by the owner as `88a54c0` (identical tree to approved head `0d3e888`); CI on main green | CI [44826372449](https://github.com/Rish866/KaamSetu/actions/runs/44826372449) |
-| Production website | **Deployed** by the owner from `main` (build marker `local`: Sites built from source); both domains serve v1.4.0; maintenance mode ended after the migration | `/maintenance` 200; browser checks 2026-11-21 |
-| Production website defect | **Icons missing**: every `/assets/node_modules/**` file is 404 on the host. Fix in PR #5, not yet deployed | `verify-production.mjs` asset check fails on production |
+| Production website | **Hosted on GitHub Pages** since 2026-11-21 (the owner can no longer reach OpenAI Sites). Every push to `main` builds, deploys and verifies the site (`.github/workflows/pages.yml`). Let's Encrypt certificate for www and apex (valid to 2027-02-19, renewed by GitHub), HTTPS enforced, apex → www 301 | Pages run 44892608340; live journey on https://www.getkaamsetu.in [44917858454](https://github.com/Rish866/KaamSetu/actions/runs/44917858454) 24/24 |
+| Missing icons | **Fixed and deployed**: 31/31 referenced assets served | `verify-production.mjs` passed 2026-11-21 15:12 UTC |
 | Production database | **Migrated** to `202611200006` by the owner's `apply` run, after its own verified encrypted backup | [apply 44829703139](https://github.com/Rish866/KaamSetu/actions/runs/44829703139), backup `production-backup-20261120T223212Z` |
 | Production checks after release | Catalog checks passed; 30 public API checks passed | [checks 44866418793](https://github.com/Rish866/KaamSetu/actions/runs/44866418793) |
 | Sign-in on the live site | **Production tested** (no-write check only): the live form reached production Auth, which returned 400 for a wrong password, and the UI showed the right message, on both domains | browser check 2026-11-21 |
@@ -26,6 +26,7 @@ Status words: Written → Locally tested → CI tested → Merged → Deployed �
 * 2026-11-20 22:08–22:35 UTC: owner merged PR #3, deployed the website, ran `backup` and `apply`. Migrations 0001–0006 applied; post-apply checks passed in the same run.
 * 2026-11-21: post-release verification found the missing-icon defect (PR #5) and ran the first restore drill.
 * 2026-11-21: live journey passed in production (run 44873263273).
+* 2026-11-21: website moved from OpenAI Sites to GitHub Pages. Owner changed GoDaddy DNS (4 A records 185.199.108-111.153; www CNAME rish866.github.io) and enabled the custom domain + HTTPS. Icons fixed in production.
 
 ## Independent review
 `docs/reviews/2026-11-19-210714-pr-2-3.md` (verdict NEEDS_CHANGES, 3 blockers, 7 high). Every blocker and high finding is fixed in `202611200004_review_fixes.sql` plus app changes, each with a test in `tests/db/review-fixes.test.mjs`. Medium/low items that remain open are listed in docs/SECURITY.md "Known gaps".

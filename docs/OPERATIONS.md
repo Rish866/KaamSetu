@@ -3,6 +3,9 @@
 Audience: whoever runs KaamSetu day to day. Commands assume the Supabase CLI is installed and you are logged in
 (`supabase login`) on a trusted computer. Never paste keys into chat, issues or code.
 
+## Website hosting (since 2026-11-21)
+The website is published by GitHub Actions to GitHub Pages (`.github/workflows/pages.yml`) on every push to `main`; the job checks the build, deploys it and verifies the live site serves that exact build with every asset. Custom domain and HTTPS are in Settings → Pages. DNS (GoDaddy): four `A` records for `@` → 185.199.108.153, .109.153, .110.153, .111.153 and `www` CNAME → `rish866.github.io`. **Rollback:** Actions → "Website on GitHub Pages" → pick an earlier successful run → Re-run all jobs (redeploys that commit). OpenAI Sites (`.openai/hosting.json`) is no longer used.
+
 ## 1. Deployment window for v1.4.0
 
 The full, approved-only procedure is **docs/RELEASE_PLAN.md** (website first, then database; downtime estimate; rollback).
