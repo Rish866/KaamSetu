@@ -51,6 +51,11 @@ jobs:
           OWNER_ADMIN_PASSWORD: ${{ secrets.LIVE_ADMIN_PASSWORD }}
         run: |
           set -euo pipefail
+          # Public (publishable) key, read from the deployed website bundle rather than stored in the repository.
+          site="${{ inputs.base_url }}"
+          pk=$(for f in $(curl -sS "$site/" | grep -oE '/_expo/static/js/web/[^"]+\.js' | sort -u); do curl -sS "$site$f"; done | grep -oE 'sb_publishable_[A-Za-z0-9_-]{10,}' | head -1)
+          [ -n "$pk" ] || { echo "::error::Could not read the publishable key from $site"; exit 1; }
+          echo "LIVE_SUPABASE_ANON_KEY=$pk" >> "$GITHUB_ENV"
           if [ -n "$OWNER_ADMIN_EMAIL" ] && [ -n "$OWNER_ADMIN_PASSWORD" ]; then
             echo "Using the owner-provided test administrator."
             { echo "LIVE_ADMIN_EMAIL=$OWNER_ADMIN_EMAIL"; echo "LIVE_ADMIN_PASSWORD=$OWNER_ADMIN_PASSWORD"; } >> "$GITHUB_ENV"
@@ -83,7 +88,6 @@ jobs:
         env:
           LIVE_BASE_URL: ${{ inputs.base_url }}
           LIVE_SUPABASE_URL: ${{ env.SUPABASE_URL }}
-          LIVE_SUPABASE_ANON_KEY: sb_publishable_40DBVbkTYmqzhoRHeLsfbQ_9qTIj_4X # public key, shipped in the website bundle
         run: npx playwright test --config e2e/live/playwright.live.config.ts
 
       - name: Clean up QA data (always; through the product's audited functions)
