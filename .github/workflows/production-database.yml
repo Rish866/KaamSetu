@@ -8,9 +8,9 @@ on:
   workflow_dispatch:
     inputs:
       action:
-        description: status | backup | dry-run | drift | apply | checks | functions | auth-probe | email-setup
+        description: status | backup | dry-run | drift | apply | checks | functions | auth-probe | email-setup | restore-drill
         type: choice
-        options: [status, backup, dry-run, drift, apply, checks, functions, auth-probe, email-setup]
+        options: [status, backup, dry-run, drift, apply, checks, functions, auth-probe, email-setup, restore-drill]
         default: status
       confirm:
         description: 'Required for apply: type APPLY zrexqtzhdkkupyxmfqxd'
@@ -19,6 +19,7 @@ on:
 
 permissions:
   contents: read
+  actions: read # restore-drill downloads the latest backup artifact of this repository
 
 concurrency:
   group: production-database
@@ -46,7 +47,7 @@ jobs:
           missing=""
           [ -z "$T" ] && missing="$missing SUPABASE_ACCESS_TOKEN"
           [ -z "$P" ] && missing="$missing SUPABASE_DB_PASSWORD"
-          if [ "$ACTION" = "backup" ] || [ "$ACTION" = "apply" ]; then [ -z "$B" ] && missing="$missing BACKUP_PASSPHRASE"; fi
+          if [ "$ACTION" = "backup" ] || [ "$ACTION" = "apply" ] || [ "$ACTION" = "restore-drill" ]; then [ -z "$B" ] && missing="$missing BACKUP_PASSPHRASE"; fi
           if [ "$ACTION" = "email-setup" ] && [ -z "$R" ]; then missing="$missing RESEND_API_KEY"; fi
           if [ -n "$missing" ]; then echo "::error::Missing repository secrets:$missing"; exit 1; fi
           if [ "$ACTION" = "apply" ] && [ "$CONFIRM" != "APPLY $PROJECT_REF" ]; then echo "::error::apply requires confirm = 'APPLY $PROJECT_REF'"; exit 1; fi
@@ -124,7 +125,7 @@ jobs:
           set -euo pipefail
           stamp=$(date -u +%Y%m%dT%H%M%SZ); mkdir -p backup
           supabase db dump --linked --password "$SUPABASE_DB_PASSWORD" -f "backup/$stamp-schema.sql"
-          supabase db dump --linked --password "$SUPABASE_DB_PASSWORD" --data-only -f "backup/$stamp-data.sql"
+          supabase db dump --linked --password "$SUPABASE_DB_PASSWORD" --data-only --use-copy -f "backup/$stamp-data.sql"
           supabase db dump --linked --password "$SUPABASE_DB_PASSWORD" --role-only -f "backup/$stamp-roles.sql"
           for f in backup/*.sql; do
             echo "$BACKUP_PASSPHRASE" | gpg --batch --yes --pinentry-mode loopback --passphrase-fd 0 --symmetric --cipher-algo AES256 -o "$f.gpg" "$f"
@@ -230,3 +231,23 @@ jobs:
           code=$(curl -sS -o resp.json -w "%{http_code}" -X PATCH -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" -H 'Content-Type: application/json' -d "$body" "https://api.supabase.com/v1/projects/$PROJECT_REF/config/auth")
           echo "Management API status: $code"; jq '{smtp_host, smtp_port, smtp_user, smtp_admin_email, smtp_sender_name, rate_limit_email_sent}' resp.json
           [ "$code" = "200" ]
+
+      - name: Download the latest production backup
+        if: inputs.action == 'restore-drill'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          name=$(gh api "repos/$GITHUB_REPOSITORY/actions/artifacts?per_page=100" --jq '[.artifacts[] | select(.name | startswith("production-backup-")) | select(.expired | not)] | sort_by(.created_at) | last | .name')
+          [ -n "$name" ] && [ "$name" != "null" ] || { echo "::error::No unexpired production backup artifact (they are kept 30 days). Run action backup first."; exit 1; }
+          echo "Restoring $name"
+          run=$(gh api "repos/$GITHUB_REPOSITORY/actions/artifacts?name=$name" --jq '.artifacts[0].workflow_run.id')
+          gh run download "$run" -R "$GITHUB_REPOSITORY" -n "$name" -D restore-input
+          ls -l restore-input
+
+      - name: Restore drill (new empty Supabase database on this runner; prints counts only)
+        if: inputs.action == 'restore-drill'
+        env:
+          BACKUP_PASSPHRASE: ${{ secrets.BACKUP_PASSPHRASE }}
+          EXPECT_SCHEMA: '202611200006'
+        run: bash scripts/restore-drill.sh restore-input

@@ -26,6 +26,12 @@ check('bundle points at production Supabase project zrexqtzhdkkupyxmfqxd', url =
 check('bundle contains no service-role or secret key material', !/sb_secret_[A-Za-z0-9_-]{20,}|c2VydmljZV9yb2xl/.test(js), {});
 const demo = ['HarbourCloud', 'KiteRoute', 'BlueMango', 'Private prototype', 'Candidate demo', 'Employer demo', 'Admin demo'].filter((s) => js.includes(s) || html.includes(s));
 check('deployed website contains no demo data strings', demo.length === 0, { found: demo });
+// Every static asset referenced by the entry bundles (icon fonts, images) must actually be served. On 2026-11-21 the
+// host dropped assets/node_modules/** and every icon font returned 404.
+const assets = [...new Set(js.match(/\/assets\/[^"'\s]+\.(?:ttf|otf|woff2?|png|jpe?g|svg|gif|webp)/g) ?? [])];
+const missing = [];
+for (const a of assets) { const r = await fetch(new URL(a, sites[0])); if (r.status !== 200) missing.push(`${r.status} ${a}`); await r.arrayBuffer().catch(() => null); }
+check('every asset referenced by the website bundle is served', assets.length > 0 && missing.length === 0, { referenced: assets.length, missing: missing.slice(0, 10) });
 check('page has a <title>', /<title>[^<]+<\/title>/.test(html), {}, false);
 check('page has a Content-Security-Policy meta tag', /Content-Security-Policy/.test(html), {}, false);
 

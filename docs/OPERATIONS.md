@@ -15,7 +15,10 @@ before the new website is confirmed live. Store builds (`v1.4.0` tag) come later
 Migrations are never edited or rolled back in place. If a migration fails or misbehaves:
 * **Failed during `db push`:** the Supabase CLI is expected to run each migration file in its own transaction, so a failing file leaves no partial changes and is not recorded as applied (unverified for this project; confirm with `supabase migration list` and `scripts/preflight.sql` after any failure). Fix it in a **new** migration (the failing one was never applied, so it may be corrected before retrying only if `supabase migration list` confirms it is absent remotely).
 * **Applied but wrong behaviour:** write a new migration that corrects it (e.g. re-create a policy or function). Re-run CI and the `apply` action.
-* **Data damage:** restore from the encrypted backup artifact of that run: `gpg --decrypt <file>.sql.gpg > file.sql`, then restore into a **new** Supabase project (`psql "$NEW_DB_URL" -f roles.sql -f schema.sql -f data.sql`), verify counts against `scripts/preflight.sql` output from the run log, and repoint the app (`EXPO_PUBLIC_SUPABASE_URL`, rebuild). Paid-plan PITR is the faster alternative.
+* **Data damage:** restore the encrypted backup artifact into a **new** Supabase project with exactly the steps in `scripts/restore-drill.sh` (rehearsed; see section 4). Two steps are essential and easy to miss:
+  1. **Default privileges before the schema.** A new project grants everything on new objects to `anon`, `authenticated` and `service_role`. Without first running the `REVOKE` lines plus the backup's own `ALTER DEFAULT PRIVILEGES FOR ROLE "postgres"` lines, the restored database lets anonymous users execute every admin and worker function (found by the first drill).
+  2. **Drop empty `COPY` blocks** from the data file; some are for Supabase-managed tables that `postgres` may not write to.
+  Then run `psql --single-transaction -f roles.sql -f default-privileges.sql -f schema.sql -c 'SET session_replication_role = replica' -f data.sql`, run `scripts/production-checks.sql` against the new project (must pass), repoint the website (`EXPO_PUBLIC_SUPABASE_URL` / publishable key, rebuild, redeploy) and the workflows (`PROJECT_REF`). Auth sessions do not survive, so users sign in again. Paid-plan PITR is the faster alternative.
 * **App/DB mismatch:** the v1.4.0 app shows "KaamSetu is being updated" when `schema_version()` is missing or older than it needs, instead of failing screens.
 
 ## Deleting users
@@ -58,12 +61,8 @@ processor of resume files **[LEGAL REVIEW]**. Resume uploads stay switched off (
 
 * Supabase takes daily backups on paid plans; Point-in-Time Recovery is an add-on. **Owner decision**: Pro plan with PITR is recommended before real users.
 * Before every migration the `apply` action takes an encrypted logical backup (schema, data, roles) as a 30-day workflow artifact. The repository is public, so backups are GPG-encrypted with `BACKUP_PASSPHRASE`; keep that passphrase in the owner's password manager. Run action `backup` on its own at any time.
-* **Restore drill (monthly; first before the pilot):**
-  1. Create a scratch Supabase project (free tier is fine).
-  2. `psql "$SCRATCH_DB_URL" -f <schema.sql>` then `-f <data.sql>`.
-  3. Run `select count(*) from public.profiles; select count(*) from public.jobs; select count(*) from public.applications;` and compare with production.
-  4. Record date, duration, row counts and problems in `docs/drills.md`. Delete the scratch project.
-* Verified so far: every migration applies in order from an empty database, and the v1.4.0 migrations apply on top of a reconstruction of the v1.3.0 production schema with data (`tests/db/review-fixes.test.mjs`, upgrade-path test). **No real backup has been taken and no restore drill has been performed.**
+* **Restore drill (monthly, and after every schema change):** Actions → "Production database" → action `backup`, then action `restore-drill`. The drill decrypts the newest backup artifact, restores it into a new empty Supabase database on the GitHub runner, and passes only if every table's row count equals the backup, `schema_version()` matches and the production catalog checks pass on the restored copy. It prints table names and counts only. Record the run in `docs/drills.md`.
+* **Drills performed:** see `docs/drills.md`. The first passing drill was 2026-11-21 (run 44868237416). This proves the backup is complete and restorable into a fresh Supabase database. It does **not** prove a cut-over of the live website and workflows to a new project; that remains unrehearsed.
 
 ## 5. Incident response
 
