@@ -9,6 +9,20 @@ test.beforeEach(async ({ page }) => {
   await page.route('**/rest/v1/rpc/schema_version', (route) => route.fulfill({ json: '202611200006' }));
 });
 
+test('every same-origin file the pages request exists, and no asset path contains node_modules', async ({ page }) => {
+  const failures: string[] = []; const requested: string[] = [];
+  page.on('response', (r) => {
+    const u = new URL(r.url());
+    if (u.origin !== new URL(page.url() || 'http://localhost:4173').origin && !u.host.startsWith('localhost')) return;
+    requested.push(u.pathname);
+    if (r.status() >= 400) failures.push(`${r.status()} ${u.pathname}`);
+  });
+  for (const p of ['/', '/login?role=candidate']) { await page.goto(p); await page.waitForLoadState('networkidle'); }
+  expect(failures).toEqual([]);
+  expect(requested.filter((p) => p.includes('node_modules')), 'static hosts drop node_modules folders').toEqual([]);
+  expect(requested.some((p) => /\/assets\/vendor\/.+Ionicons\.[0-9a-f]+\.ttf$/.test(p)), 'icon font requested from /assets/vendor').toBe(true);
+});
+
 test.describe('production build is honest and safe', () => {
   test('landing page contains no fabricated statistics or prototype labels', async ({ page }) => {
     await page.goto('/');
