@@ -62,14 +62,14 @@ export default function ProfileScreen() {
     if (error) return bad(error);
     await supabase.from('candidate_locations').delete().eq('candidate_id', uid);
     if (form.prefs.length) { const { error: e2 } = await supabase.from('candidate_locations').insert(form.prefs.slice(0, 10).map((location_id, i) => ({ candidate_id: uid, location_id, preference_rank: i + 1 }))); if (e2) return bad(e2); }
-    setMsg({ tone: 'success', text: 'Profile saved.' }); await refresh();
+    await refresh(); setMsg({ tone: 'success', text: 'Profile saved.' }); // only after the reload has reset the form
   }
   async function saveSkills() {
     if (!form) return;
     const have = bundle.data!.skills; const add = form.skills.filter((s) => !have.includes(s)); const drop = have.filter((s) => !form.skills.includes(s));
     if (add.length) { const { error } = await supabase.from('candidate_skills').upsert(add.map((skill_id) => ({ candidate_id: uid, skill_id, confirmed: true }))); if (error) return bad(error); }
     if (drop.length) { const { error } = await supabase.from('candidate_skills').delete().eq('candidate_id', uid).in('skill_id', drop); if (error) return bad(error); }
-    setMsg({ tone: 'success', text: 'Skills saved.' }); await refresh();
+    await refresh(); setMsg({ tone: 'success', text: 'Skills saved.' }); // only after the reload has reset the form
   }
   async function upload(kind: 'resume' | 'photo') {
     try {

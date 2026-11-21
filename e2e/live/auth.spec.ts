@@ -6,7 +6,8 @@ test.skip(!configured || !env.supabaseUrl || !env.anonKey, 'LIVE_* variables req
 test.describe.configure({ mode: 'serial' });
 
 const email = qaEmail('auth');
-const phone = `9${String(Date.now()).slice(-9)}`;
+// +91 1000xxxxxx is not allocated to Indian mobiles, so a test run can never register a real person's number.
+const phone = `1000${String(Date.now()).slice(-6)}`;
 const created: { email?: string; phone?: string; kind: 'candidate' | 'employer' }[] = [];
 
 test('email/password sign-up creates a candidate session; session persists across reloads', async ({ page }) => {

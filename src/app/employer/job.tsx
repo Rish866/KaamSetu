@@ -34,7 +34,7 @@ export default function JobApplicants() {
   async function refresh() { await Promise.all([apps.reload(), ivs.reload()]); }
   async function move(a: Applicant, to: string, reason?: string, det?: string) {
     const { error } = await supabase.rpc('transition_application', { p_application: a.application_id, p_to: to, p_reason: reason ?? null, p_details: det ?? null });
-    if (error) return bad(error); setMsg({ tone: 'success', text: `${a.display_name} moved to ${stageLabels[to] ?? to}.` }); await refresh();
+    if (error) return bad(error); await refresh(); setMsg({ tone: 'success', text: `${a.display_name} moved to ${stageLabels[to] ?? to}.` });
   }
   async function reveal(a: Applicant) {
     const { data, error } = await supabase.rpc('get_applicant_contact', { p_application: a.application_id }); if (error) return bad(error);

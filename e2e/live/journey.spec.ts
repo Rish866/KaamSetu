@@ -34,6 +34,8 @@ test('2. candidate completes the profile', async () => {
   await c.getByRole('button', { name: 'Thane', exact: true }).first().click();
   await btn(c, 'Save profile').click();
   await expect(c.getByText('Profile saved.')).toBeVisible();
+  // Builds before 2026-11-21 show "Profile saved." before the reload that resets the form; let it finish first.
+  await c.waitForLoadState('networkidle');
   for (const s of ['CRM', 'Customer support', 'English']) await c.getByRole('button', { name: s, exact: true }).last().click();
   await btn(c, 'Save skills').click();
   await expect(c.getByText('Skills saved.')).toBeVisible();
@@ -94,8 +96,15 @@ test('9-10. employer creates a job; admin approves it', async () => {
 
 test('11-12. candidate searches, sees an explainable match and applies', async () => {
   await c.goto(`${env.base}/candidate`);
-  await c.getByRole('textbox', { name: /Search title/ }).fill(jobTitle);
-  await btn(c, 'Search').click();
+  await c.waitForLoadState('networkidle');
+  // Pages are pre-rendered HTML; typing before the app has hydrated can be wiped. Retry the search until the job shows.
+  await expect(async () => {
+    const box = c.getByRole('textbox', { name: /Search title/ });
+    await box.fill(jobTitle);
+    await expect(box).toHaveValue(jobTitle);
+    await btn(c, 'Search').click();
+    await expect(card(c, jobTitle, 'View details')).toBeVisible({ timeout: 5_000 });
+  }).toPass({ timeout: 45_000 });
   await inCard(c, jobTitle, 'View details');
   await expect(c.getByText(/Why this is a \d+% match/)).toBeVisible({ timeout: 20_000 });
   await expect(c.getByText(/Matches 2 of 2 listed skills/)).toBeVisible();
@@ -112,6 +121,8 @@ test('13-15. employer views and shortlists; contact stays hidden until the candi
   await inCard(e, jobTitle, 'Applicants');
   await expect(e.getByText(cand.name)).toBeVisible({ timeout: 20_000 });
   await btn(e, 'Mark viewed').click();
+  // Wait for the first transition: applied -> shortlisted is also allowed, so a fast second click can skip "Viewed".
+  await expect(e.getByText(/moved to Viewed/)).toBeVisible();
   await btn(e, 'Shortlist').click();
   await expect(e.getByText(/moved to Shortlisted/)).toBeVisible();
   await btn(e, 'View contact details').click();

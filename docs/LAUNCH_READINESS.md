@@ -9,7 +9,7 @@ pass, but the items marked **Blocker** below must be closed first. Each blocker 
 |---|------|---------------|-----|--------------------|
 | B1 | Icons missing on the live site (`/assets/node_modules/**` 404) | Every screen shows blank or broken icons; looks broken to users | Engineer: PR #5 (done, awaiting merge). **Owner**: redeploy the website from `main` | `Production database` → `checks`: "every asset referenced by the website bundle is served" passes |
 | B2 | Email delivery | No password-reset, invitation or notification email reaches anyone; team invitations cannot be accepted | **Owner**: Resend account, verified domain, GitHub secret `RESEND_API_KEY` (OWNER_ACTIONS step 5). Then engineer runs `email-setup` and a delivery test | A real reset email arrives at the QA mailbox |
-| B3 | End-to-end journey on the live site never run | Sign-up → profile → apply → employer review → interview → offer has only been tested on a local stack | **Owner**: test admin + `LIVE_ADMIN_EMAIL`/`LIVE_ADMIN_PASSWORD` secrets (step 3). Then engineer runs "Live journey" | Live journey run with 0 skipped, 0 failed |
+| ~~B3~~ | ~~End-to-end journey on the live site~~ **Closed 2026-11-21** | Passed in production: 24/24 (14 journey steps + 10 sign-in/security tests), QA data cleaned up afterwards | Engineer | [run 44873263273](https://github.com/Rish866/KaamSetu/actions/runs/44873263273) |
 | B4 | Legal texts are drafts | Privacy notice, terms and consent wording under the DPDP Act need a lawyer's approval before real personal data is collected at scale | **Owner** + lawyer (step 7) | Lawyer's written sign-off; drafts banner removed |
 | B5 | Support and privacy mailboxes | The privacy notice and app point users to `support@` and `privacy@getkaamsetu.in` | **Owner** (step 7) | A test mail to each is received |
 
@@ -30,6 +30,7 @@ pass, but the items marked **Blocker** below must be closed first. Each blocker 
 | v1.4.0 website deployed on both domains | AUDIT.md release log |
 | Database migrated to `202611200006` with a verified backup taken first | apply run 44829703139 |
 | Data access rules, grants, private buckets; anonymous users refused by private tables and protected functions | checks run 44866418793 |
+| Full live journey + sign-in/security tests on the deployed site (temporary audited QA admin; all QA data removed afterwards) | live journey run 44873263273 |
 | Live sign-in form reaches production Auth and handles a wrong password correctly | browser check 2026-11-21 |
 | Email and phone sign-up work (pre-migration) | auth-probe 44818660584 |
 | Background workers run on schedule with ClamAV | worker run 44859921097 |

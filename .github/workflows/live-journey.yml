@@ -2,13 +2,19 @@ name: Live journey (deployed site)
 
 # Runs the real-UI marketplace journey against the DEPLOYED website and production Supabase.
 # Creates qa+<run>-...@getkaamsetu.in accounts and deletes them through the product's own deletion flow at the end.
-# Secrets: LIVE_ADMIN_EMAIL, LIVE_ADMIN_PASSWORD (a dedicated test administrator granted by the owner).
+# Administrator for the journey:
+#   * secrets LIVE_ADMIN_EMAIL / LIVE_ADMIN_PASSWORD if the owner has set them, otherwise
+#   * a temporary QA administrator created for this run only: random password (masked, never stored), role granted with
+#     an audit entry, and at the end the role is revoked (audited) and the account is soft-deleted (cannot sign in).
 on:
   workflow_dispatch:
     inputs:
       base_url:
         description: Site to test
         default: https://www.getkaamsetu.in
+      assets_must_load:
+        description: Fail before the journey if any icon/image is missing on the site (yes | no)
+        default: 'yes'
 
 permissions:
   contents: read
@@ -17,10 +23,14 @@ concurrency:
   group: live-journey
   cancel-in-progress: false
 
+env:
+  PROJECT_REF: zrexqtzhdkkupyxmfqxd
+  SUPABASE_URL: https://zrexqtzhdkkupyxmfqxd.supabase.co
+
 jobs:
   journey:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 40
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -29,12 +39,74 @@ jobs:
           cache: npm
       - run: npm ci
       - name: Read-only production verification first
-        run: node scripts/verify-production.mjs --expect-schema 202611200006 --site "${{ inputs.base_url }}"
+        run: node scripts/verify-production.mjs --expect-schema 202611200006 --site "${{ inputs.base_url }}" ${{ inputs.assets_must_load == 'no' && '--assets-optional' || '' }}
       - run: npx playwright install --with-deps chromium
+
+      - name: Administrator for this run
+        id: admin
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+          OWNER_ADMIN_EMAIL: ${{ secrets.LIVE_ADMIN_EMAIL }}
+          OWNER_ADMIN_PASSWORD: ${{ secrets.LIVE_ADMIN_PASSWORD }}
+        run: |
+          set -euo pipefail
+          # Public (publishable) key, read from the deployed website bundle rather than stored in the repository.
+          site="${{ inputs.base_url }}"
+          pk=$(for f in $(curl -sS "$site/" | grep -oE '/_expo/static/js/web/[^"]+\.js' | sort -u); do curl -sS "$site$f"; done | grep -oE 'sb_publishable_[A-Za-z0-9_-]{10,}' | head -1)
+          [ -n "$pk" ] || { echo "::error::Could not read the publishable key from $site"; exit 1; }
+          echo "LIVE_SUPABASE_ANON_KEY=$pk" >> "$GITHUB_ENV"
+          if [ -n "$OWNER_ADMIN_EMAIL" ] && [ -n "$OWNER_ADMIN_PASSWORD" ]; then
+            echo "Using the owner-provided test administrator."
+            { echo "LIVE_ADMIN_EMAIL=$OWNER_ADMIN_EMAIL"; echo "LIVE_ADMIN_PASSWORD=$OWNER_ADMIN_PASSWORD"; } >> "$GITHUB_ENV"
+            echo "temporary=false" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          [ -n "$SUPABASE_ACCESS_TOKEN" ] && [ -n "$SUPABASE_DB_PASSWORD" ] || { echo "::error::Need LIVE_ADMIN_* or SUPABASE_ACCESS_TOKEN + SUPABASE_DB_PASSWORD"; exit 1; }
+          keys=$(curl -sSf -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" "https://api.supabase.com/v1/projects/$PROJECT_REF/api-keys?reveal=true")
+          k=$(echo "$keys" | jq -r '([.[] | select(.type == "secret") | .api_key][0]) // ([.[] | select(.name == "service_role") | .api_key][0])')
+          echo "::add-mask::$k"
+          cfg=$(curl -sSf -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" "https://api.supabase.com/v1/projects/$PROJECT_REF/config/database/pooler")
+          cs=$(echo "$cfg" | jq -r '([.[] | select(.database_type == "PRIMARY")][0] // .[0]).connection_string')
+          pw=$(jq -rn --arg p "$SUPABASE_DB_PASSWORD" '$p|@uri')
+          db=$(echo "$cs" | sed -e "s|\[YOUR-PASSWORD\]|$pw|" -e 's|:6543/|:5432/|'); case "$db" in *\?*) db="$db&sslmode=require" ;; *) db="$db?sslmode=require" ;; esac
+          echo "::add-mask::$db"
+          run="${GITHUB_RUN_ID}"
+          email="qa+admin-$run@getkaamsetu.in"
+          apw="Qa-$(openssl rand -hex 16)-A9"; echo "::add-mask::$apw"
+          body=$(jq -n --arg e "$email" --arg p "$apw" --arg n "QA admin (automated run $run)" '{email:$e, password:$p, email_confirm:true, user_metadata:{display_name:$n, account_kind:"candidate", accepted_notice_version:"2026-11-19"}}')
+          id=$(curl -sSf -X POST "$SUPABASE_URL/auth/v1/admin/users" -H "apikey: $k" -H "Authorization: Bearer $k" -H 'Content-Type: application/json' -d "$body" | jq -r .id)
+          [ -n "$id" ] && [ "$id" != null ] || { echo "::error::Could not create the temporary QA administrator"; exit 1; }
+          psql "$db" -v ON_ERROR_STOP=1 -q -v id="$id" -v why="Temporary QA administrator for live journey run $run (GitHub Actions)" <<'SQL'
+          insert into private.app_roles (user_id, role) values (:'id', 'admin') on conflict do nothing;
+          select private.audit('admin.role_granted', 'user', :'id', null, jsonb_build_object('role', 'admin', 'reason', :'why'));
+          SQL
+          echo "Temporary QA administrator created and granted (user $id)."
+          { echo "LIVE_ADMIN_EMAIL=$email"; echo "LIVE_ADMIN_PASSWORD=$apw"; echo "TMP_ADMIN_ID=$id"; echo "TMP_KEY=$k"; echo "TMP_DB=$db"; } >> "$GITHUB_ENV"
+          echo "temporary=true" >> "$GITHUB_OUTPUT"
+
       - name: Real UI journey
         env:
           LIVE_BASE_URL: ${{ inputs.base_url }}
-          LIVE_ADMIN_EMAIL: ${{ secrets.LIVE_ADMIN_EMAIL }}
-          LIVE_ADMIN_PASSWORD: ${{ secrets.LIVE_ADMIN_PASSWORD }}
+          LIVE_SUPABASE_URL: ${{ env.SUPABASE_URL }}
         run: npx playwright test --config e2e/live/playwright.live.config.ts
+
+      - name: Clean up QA data (always; through the product's audited functions)
+        if: always() && steps.admin.outputs.temporary == 'true'
+        env:
+          DB_URL: ${{ env.TMP_DB }}
+          ADMIN_ID: ${{ env.TMP_ADMIN_ID }}
+        run: bash scripts/qa-cleanup.sh
+
+      - name: Remove the temporary QA administrator
+        if: always() && steps.admin.outputs.temporary == 'true'
+        run: |
+          set -euo pipefail
+          psql "$TMP_DB" -v ON_ERROR_STOP=1 -q -v id="$TMP_ADMIN_ID" -v why="End of live journey run $GITHUB_RUN_ID" <<'SQL'
+          delete from private.app_roles where user_id = :'id';
+          select private.audit('admin.role_revoked', 'user', :'id', null, jsonb_build_object('role', 'admin', 'reason', :'why'));
+          SQL
+          code=$(curl -sS -o /dev/null -w '%{http_code}' -X DELETE "$SUPABASE_URL/auth/v1/admin/users/$TMP_ADMIN_ID" -H "apikey: $TMP_KEY" -H "Authorization: Bearer $TMP_KEY" -H 'Content-Type: application/json' -d '{"should_soft_delete":true}')
+          echo "role revoked; auth soft delete status $code"
+          left=$(psql "$TMP_DB" -At -c "select count(*) from private.app_roles where user_id = '$TMP_ADMIN_ID'")
+          [ "$code" = 200 ] && [ "$left" = 0 ] || { echo "::error::Temporary administrator not fully removed (status $code, roles left $left). Remove it in Admin -> Access."; exit 1; }
       # Traces can contain typed form values, so they are not uploaded from live runs.

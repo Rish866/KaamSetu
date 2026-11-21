@@ -1,0 +1,3 @@
+# Supabase PUBLISHABLE key (public by design: it is shipped in the website bundle), committed once in a workflow
+# on 2026-11-21 and removed in the next commits. Real secret keys (sb_secret_...) must never be allowlisted.
+4acdc62e8e6a0986ed8f7acdf0d8d3f2295b40d8:.github/workflows/live-journey.yml:generic-api-key:86

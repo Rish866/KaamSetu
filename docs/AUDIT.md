@@ -12,7 +12,7 @@ Status words: Written → Locally tested → CI tested → Merged → Deployed �
 | Production database | **Migrated** to `202611200006` by the owner's `apply` run, after its own verified encrypted backup | [apply 44829703139](https://github.com/Rish866/KaamSetu/actions/runs/44829703139), backup `production-backup-20261120T223212Z` |
 | Production checks after release | Catalog checks passed; 30 public API checks passed | [checks 44866418793](https://github.com/Rish866/KaamSetu/actions/runs/44866418793) |
 | Sign-in on the live site | **Production tested** (no-write check only): the live form reached production Auth, which returned 400 for a wrong password, and the UI showed the right message, on both domains | browser check 2026-11-21 |
-| Full live journey | **Not run**: 32/32 skipped, `LIVE_ADMIN_EMAIL`/`LIVE_ADMIN_PASSWORD` not configured (owner step 3) | [run 44866655564](https://github.com/Rish866/KaamSetu/actions/runs/44866655564) |
+| Full live journey | **Production tested**: 24/24 passed (journey 14, sign-in/security 10; reset-email and local-only storage tests skipped). A temporary QA admin is created per run (audited) and removed; QA data is cleaned up through product functions even if a run fails | [run 44873263273](https://github.com/Rish866/KaamSetu/actions/runs/44873263273); earlier failed runs 44872114795, 44872900877 (test timing bugs, fixed; their data was cleaned up) |
 | Email + phone sign-up | Production tested on the v1.3.0 schema (before the migration) | [auth-probe 44818660584](https://github.com/Rish866/KaamSetu/actions/runs/44818660584) |
 | Background workers | Running on schedule in production; ClamAV 1.5.5 loaded; nothing to scan (uploads off); email skipped (no provider) | [run 44859921097](https://github.com/Rish866/KaamSetu/actions/runs/44859921097) |
 | Backup restore drill | **Passed** into a new empty Supabase database (first attempt found a privilege issue in the restore procedure, now fixed) | [run 44868237416](https://github.com/Rish866/KaamSetu/actions/runs/44868237416), docs/drills.md |
@@ -25,6 +25,7 @@ Status words: Written → Locally tested → CI tested → Merged → Deployed �
 * 2026-11-20: owner declined migrate-first; deploy-first plan written (docs/RELEASE_PLAN.md).
 * 2026-11-20 22:08–22:35 UTC: owner merged PR #3, deployed the website, ran `backup` and `apply`. Migrations 0001–0006 applied; post-apply checks passed in the same run.
 * 2026-11-21: post-release verification found the missing-icon defect (PR #5) and ran the first restore drill.
+* 2026-11-21: live journey passed in production (run 44873263273).
 
 ## Independent review
 `docs/reviews/2026-11-19-210714-pr-2-3.md` (verdict NEEDS_CHANGES, 3 blockers, 7 high). Every blocker and high finding is fixed in `202611200004_review_fixes.sql` plus app changes, each with a test in `tests/db/review-fixes.test.mjs`. Medium/low items that remain open are listed in docs/SECURITY.md "Known gaps".
