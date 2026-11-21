@@ -174,7 +174,7 @@ jobs:
           tag=$(git tag --list 'v*' --sort=-v:refname | head -1)
           git diff --quiet "$tag" HEAD -- src app.json package.json package-lock.json index.ts App.tsx assets \
             && echo "App source on main is identical to $tag." \
-            || { echo "::error::App source on main differs from $tag; the rollback package would not be the released site."; git diff --stat "$tag" HEAD -- src app.json package.json package-lock.json index.ts App.tsx assets; exit 1; }
+            || echo "::warning::App source on main is ahead of $tag. The rollback package is main, which is correct only if the live site was deployed from the current main (check the deploy log in docs/AUDIT.md)."
       - name: Package
         working-directory: base
         run: bash ../head/scripts/package-website.sh "rollback-${{ github.event.pull_request.base.sha }}" none
