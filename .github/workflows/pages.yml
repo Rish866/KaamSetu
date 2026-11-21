@@ -1,0 +1,106 @@
+name: Website on GitHub Pages
+
+# Builds the website from main and publishes it on GitHub Pages, so the site can be deployed without the
+# OpenAI Sites account. Without a custom domain it lives at https://rish866.github.io/KaamSetu/ (sub-path build).
+# To serve it on getkaamsetu.in instead: set repository variable PAGES_CUSTOM_DOMAIN=www.getkaamsetu.in, point the
+# domain's DNS at GitHub Pages (docs/OWNER_ACTIONS.md), and rerun this workflow (root-path build + CNAME file).
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+env:
+  EXPO_NO_TELEMETRY: 1
+  EXPO_PUBLIC_SUPABASE_URL: ${{ vars.EXPO_PUBLIC_SUPABASE_URL }}
+  EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${{ vars.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY }}
+  EXPO_PUBLIC_BUILD_SHA: ${{ github.sha }}
+  CUSTOM_DOMAIN: ${{ vars.PAGES_CUSTOM_DOMAIN }}
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    outputs:
+      site: ${{ steps.base.outputs.site }}
+      enabled: ${{ steps.enabled.outputs.enabled }}
+    steps:
+      - name: Is GitHub Pages switched on for this repository?
+        id: enabled
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh api "repos/$GITHUB_REPOSITORY/pages" --jq .build_type > pages.txt 2>/dev/null; then
+            echo "Pages is on (source: $(cat pages.txt))."; echo "enabled=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::notice::GitHub Pages is not switched on yet. Owner: Settings > Pages > Source: GitHub Actions, then rerun this workflow. Building only."
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+          fi
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Base path
+        id: base
+        run: |
+          set -euo pipefail
+          [ -n "$EXPO_PUBLIC_SUPABASE_URL" ] && [ -n "$EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY" ] || { echo "::error::Repository variables EXPO_PUBLIC_SUPABASE_* are missing"; exit 1; }
+          if [ -n "$CUSTOM_DOMAIN" ]; then
+            echo "site=https://$CUSTOM_DOMAIN" >> "$GITHUB_OUTPUT"
+          else
+            # Project site: everything must be served under /<repository>.
+            node -e 'const f="app.json",fs=require("fs"),j=JSON.parse(fs.readFileSync(f));j.expo.experiments={...(j.expo.experiments||{}),baseUrl:"/"+process.argv[1]};fs.writeFileSync(f,JSON.stringify(j,null,2))' "${GITHUB_REPOSITORY#*/}"
+            echo "site=https://${GITHUB_REPOSITORY_OWNER,,}.github.io/${GITHUB_REPOSITORY#*/}" >> "$GITHUB_OUTPUT"
+          fi
+      - run: npx expo export --platform web
+      - name: Checks before publishing
+        run: |
+          set -euo pipefail
+          grep -q "name=\"kaamsetu-build\" content=\"$GITHUB_SHA\"" dist/index.html
+          grep -rIq "$EXPO_PUBLIC_SUPABASE_URL" dist/_expo || { echo "::error::bundle not configured for Supabase"; exit 1; }
+          if grep -rIl -E "sb_secret_[A-Za-z0-9_-]{20,}|c2VydmljZV9yb2xl|SUPABASE_SERVICE_ROLE_KEY" dist; then echo "::error::secret key material in dist"; exit 1; fi
+          [ -z "$(find dist -path '*node_modules*' -print -quit)" ] || { echo "::error::node_modules folder in dist"; exit 1; }
+          cp "dist/+not-found.html" dist/404.html   # GitHub Pages serves 404.html for unknown paths
+          touch dist/.nojekyll
+          if [ -n "$CUSTOM_DOMAIN" ]; then echo "$CUSTOM_DOMAIN" > dist/CNAME; fi
+      - uses: actions/upload-pages-artifact@v3
+        if: steps.enabled.outputs.enabled == 'true'
+        with:
+          path: dist
+
+  deploy:
+    needs: build
+    if: needs.build.outputs.enabled == 'true'
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
+
+  verify:
+    needs: [build, deploy]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: The published site is this build, and every file it references is served
+        env:
+          SITE: ${{ needs.build.outputs.site }}
+        run: |
+          set -euo pipefail
+          for i in $(seq 1 20); do curl -sS "$SITE/" | grep -q "content=\"$GITHUB_SHA\"" && break; echo "waiting for Pages to serve $GITHUB_SHA"; sleep 15; done
+          curl -sS "$SITE/" | grep -q "content=\"$GITHUB_SHA\"" || { echo "::error::$SITE does not serve build $GITHUB_SHA"; exit 1; }
+          node scripts/verify-production.mjs --site "$SITE" --expect-schema 202611200006
