@@ -6,6 +6,8 @@ Audience: whoever runs KaamSetu day to day. Commands assume the Supabase CLI is 
 ## Website hosting (since 2026-11-21)
 The website is published by GitHub Actions to GitHub Pages (`.github/workflows/pages.yml`) on every push to `main`; the job checks the build, deploys it and verifies the live site serves that exact build with every asset. Custom domain and HTTPS are in Settings → Pages. DNS (GoDaddy): four `A` records for `@` → 185.199.108.153, .109.153, .110.153, .111.153 and `www` CNAME → `rish866.github.io`. **Rollback:** Actions → "Website on GitHub Pages" → pick an earlier successful run → Re-run all jobs (redeploys that commit). OpenAI Sites (`.openai/hosting.json`) is no longer used.
 
+**Email DNS (GoDaddy):** inbound mail via Zoho (MX mx/mx2/mx3.zoho.in, SPF include, DKIM `zmail._domainkey`); outbound app email via Resend on the verified subdomain `send.getkaamsetu.in` (DKIM `resend._domainkey.send`, return path CNAME `send.send`). App mail is sent from `no-reply@send.getkaamsetu.in`. A DMARC record (`p=quarantine`) exists. Never delete these records when editing DNS.
+
 ## 1. Deployment window for v1.4.0
 
 The full, approved-only procedure is **docs/RELEASE_PLAN.md** (website first, then database; downtime estimate; rollback).
