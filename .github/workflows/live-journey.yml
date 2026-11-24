@@ -108,6 +108,7 @@ jobs:
           SQL
           code=$(curl -sS -o /dev/null -w '%{http_code}' -X DELETE "$SUPABASE_URL/auth/v1/admin/users/$TMP_ADMIN_ID" -H "apikey: $TMP_KEY" -H "Authorization: Bearer $TMP_KEY" -H 'Content-Type: application/json' -d '{"should_soft_delete":true}')
           echo "role revoked; auth soft delete status $code"
+          psql "$TMP_DB" -v ON_ERROR_STOP=1 -q -f scripts/sql/suppress-qa-mail.sql
           left=$(psql "$TMP_DB" -At -c "select count(*) from private.app_roles where user_id = '$TMP_ADMIN_ID'")
           [ "$code" = 200 ] && [ "$left" = 0 ] || { echo "::error::Temporary administrator not fully removed (status $code, roles left $left). Remove it in Admin -> Access."; exit 1; }
       # Traces can contain typed form values, so they are not uploaded from live runs.

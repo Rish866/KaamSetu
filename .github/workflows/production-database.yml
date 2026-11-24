@@ -8,9 +8,9 @@ on:
   workflow_dispatch:
     inputs:
       action:
-        description: status | backup | dry-run | drift | apply | checks | functions | auth-probe | email-setup | restore-drill
+        description: status | backup | dry-run | drift | apply | checks | functions | auth-probe | email-setup | email-test | restore-drill
         type: choice
-        options: [status, backup, dry-run, drift, apply, checks, functions, auth-probe, email-setup, restore-drill]
+        options: [status, backup, dry-run, drift, apply, checks, functions, auth-probe, email-setup, email-test, restore-drill]
         default: status
       confirm:
         description: 'Required for apply: type APPLY zrexqtzhdkkupyxmfqxd'
@@ -48,7 +48,7 @@ jobs:
           [ -z "$T" ] && missing="$missing SUPABASE_ACCESS_TOKEN"
           [ -z "$P" ] && missing="$missing SUPABASE_DB_PASSWORD"
           if [ "$ACTION" = "backup" ] || [ "$ACTION" = "apply" ] || [ "$ACTION" = "restore-drill" ]; then [ -z "$B" ] && missing="$missing BACKUP_PASSPHRASE"; fi
-          if [ "$ACTION" = "email-setup" ] && [ -z "$R" ]; then missing="$missing RESEND_API_KEY"; fi
+          if { [ "$ACTION" = "email-setup" ] || [ "$ACTION" = "email-test" ]; } && [ -z "$R" ]; then missing="$missing RESEND_API_KEY"; fi
           if [ -n "$missing" ]; then echo "::error::Missing repository secrets:$missing"; exit 1; fi
           if [ "$ACTION" = "apply" ] && [ "$CONFIRM" != "APPLY $PROJECT_REF" ]; then echo "::error::apply requires confirm = 'APPLY $PROJECT_REF'"; exit 1; fi
           echo "Ref: $GITHUB_REF @ $GITHUB_SHA, action: $ACTION"
@@ -230,6 +230,60 @@ jobs:
           body=$(jq -n --arg pass "$RESEND_API_KEY" --arg from "$FROM" '{smtp_host:"smtp.resend.com", smtp_port:"465", smtp_user:"resend", smtp_pass:$pass, smtp_admin_email:$from, smtp_sender_name:"KaamSetu", rate_limit_email_sent:30}')
           code=$(curl -sS -o resp.json -w "%{http_code}" -X PATCH -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" -H 'Content-Type: application/json' -d "$body" "https://api.supabase.com/v1/projects/$PROJECT_REF/config/auth")
           echo "Management API status: $code"; jq '{smtp_host, smtp_port, smtp_user, smtp_admin_email, smtp_sender_name, rate_limit_email_sent}' resp.json
+          [ "$code" = "200" ]
+
+      - name: Email queue before sending (read-only; counts only, no addresses)
+        if: inputs.action == 'email-test' || inputs.action == 'email-setup'
+        env:
+          DB_URL: ${{ steps.conn.outputs.url }}
+        run: |
+          psql "$DB_URL" -v ON_ERROR_STOP=1 -c "
+            select o.status,
+                   count(*) filter (where coalesce(o.address, p.email) like 'qa+%@getkaamsetu.in') as to_qa_test_addresses,
+                   count(*) filter (where coalesce(o.address, p.email) is null) as no_address,
+                   count(*) filter (where coalesce(o.address, p.email) is not null and coalesce(o.address, p.email) not like 'qa+%@getkaamsetu.in') as to_real_addresses
+              from private.email_outbox o left join public.profiles p on p.id = o.recipient_id
+             group by 1 order by 1"
+          # Pending mail by kind and recipient type. Shows only the address DOMAIN, never the address.
+          psql "$DB_URL" -v ON_ERROR_STOP=1 -c "
+            select o.kind, o.category, p.status as recipient_status,
+                   case when coalesce(o.address, p.email) like 'qa+%@getkaamsetu.in' then 'qa test address'
+                        else coalesce(split_part(coalesce(o.address, p.email), '@', 2), '(none)') end as address_domain,
+                   (o.address is not null) as explicit_address, count(*), min(o.created_at)::date as oldest
+              from private.email_outbox o left join public.profiles p on p.id = o.recipient_id
+             where o.status = 'pending' group by 1,2,3,4,5 order by 6 desc"
+
+      - name: Who are the active accounts? (read-only; counts by type, no personal data)
+        if: inputs.action == 'email-test' || inputs.action == 'email-setup'
+        env:
+          DB_URL: ${{ steps.conn.outputs.url }}
+        run: |
+          psql "$DB_URL" -v ON_ERROR_STOP=1 -c "
+            select case when p.email like 'qa+admin-%@getkaamsetu.in' then 'temporary QA admin'
+                        when p.email like 'qa+%@getkaamsetu.in' then 'QA email account'
+                        when ltrim(coalesce(p.phone,''), '+') like '911000%' then 'QA phone account'
+                        when coalesce(p.email,'') = '' then 'no email (phone account)'
+                        else 'real email account' end as kind,
+                   p.status, count(*)
+              from public.profiles p group by 1,2 order by 1,2"
+
+      - name: Suppress queued mail to QA test addresses (those mailboxes do not exist; sending would bounce)
+        if: inputs.action == 'email-test' || inputs.action == 'email-setup'
+        env:
+          DB_URL: ${{ steps.conn.outputs.url }}
+        run: psql "$DB_URL" -v ON_ERROR_STOP=1 -f scripts/sql/suppress-qa-mail.sql
+
+      - name: Send one test email directly through Resend (proves the key and the verified domain)
+        if: inputs.action == 'email-test'
+        env:
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          FROM: ${{ vars.EMAIL_FROM_ADDRESS || 'no-reply@send.getkaamsetu.in' }}
+          TO: ${{ vars.EMAIL_TEST_TO || 'rishabh@getkaamsetu.in' }}
+        run: |
+          set -euo pipefail
+          body=$(jq -n --arg from "KaamSetu <$FROM>" --arg to "$TO" --arg run "$GITHUB_RUN_ID" '{from:$from, to:[$to], subject:("KaamSetu email test (run " + $run + ")"), text:("This is an automatic test from the KaamSetu website setup. If you can read this, outgoing email works. Run " + $run + ".")}')
+          code=$(curl -sS -o resp.json -w "%{http_code}" -X POST https://api.resend.com/emails -H "Authorization: Bearer $RESEND_API_KEY" -H 'Content-Type: application/json' -d "$body")
+          echo "Resend API status: $code"; jq '{id, name, message}' resp.json
           [ "$code" = "200" ]
 
       - name: Download the latest production backup
