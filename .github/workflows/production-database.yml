@@ -244,6 +244,14 @@ jobs:
                    count(*) filter (where coalesce(o.address, p.email) is not null and coalesce(o.address, p.email) not like 'qa+%@getkaamsetu.in') as to_real_addresses
               from private.email_outbox o left join public.profiles p on p.id = o.recipient_id
              group by 1 order by 1"
+          # Pending mail by kind and recipient type. Shows only the address DOMAIN, never the address.
+          psql "$DB_URL" -v ON_ERROR_STOP=1 -c "
+            select o.kind, o.category, p.status as recipient_status,
+                   case when coalesce(o.address, p.email) like 'qa+%@getkaamsetu.in' then 'qa test address'
+                        else coalesce(split_part(coalesce(o.address, p.email), '@', 2), '(none)') end as address_domain,
+                   (o.address is not null) as explicit_address, count(*), min(o.created_at)::date as oldest
+              from private.email_outbox o left join public.profiles p on p.id = o.recipient_id
+             where o.status = 'pending' group by 1,2,3,4,5 order by 6 desc"
 
       - name: Send one test email directly through Resend (proves the key and the verified domain)
         if: inputs.action == 'email-test'
