@@ -61,6 +61,6 @@ jobs:
           CLAMSCAN_VERSION_CMD: docker run --rm --entrypoint clamscan clamav/clamav:stable --version
           EMAIL_PROVIDER: ${{ secrets.RESEND_API_KEY != '' && 'resend' || '' }}
           EMAIL_API_KEY: ${{ secrets.RESEND_API_KEY }}
-          EMAIL_FROM: ${{ vars.EMAIL_FROM || 'KaamSetu <no-reply@getkaamsetu.in>' }}
+          EMAIL_FROM: ${{ vars.EMAIL_FROM || 'KaamSetu <no-reply@send.getkaamsetu.in>' }}
           SITE_URL: https://www.getkaamsetu.in
         run: node --experimental-strip-types scripts/workers/run.mjs --task "${{ inputs.task || 'all' }}"

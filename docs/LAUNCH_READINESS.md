@@ -11,7 +11,7 @@ pass, but the items marked **Blocker** below must be closed first. Each blocker 
 | B2 | Email delivery | No password-reset, invitation or notification email reaches anyone; team invitations cannot be accepted | **Owner**: Resend account, verified domain, GitHub secret `RESEND_API_KEY` (OWNER_ACTIONS step 5). Then engineer runs `email-setup` and a delivery test | A real reset email arrives at the QA mailbox |
 | ~~B3~~ | ~~End-to-end journey on the live site~~ **Closed 2026-11-21** | Passed in production: 24/24 (14 journey steps + 10 sign-in/security tests), QA data cleaned up afterwards | Engineer | [run 44873263273](https://github.com/Rish866/KaamSetu/actions/runs/44873263273) |
 | B4 | Legal texts are drafts | Privacy notice, terms and consent wording under the DPDP Act need a lawyer's approval before real personal data is collected at scale | **Owner** + lawyer (step 7) | Lawyer's written sign-off; drafts banner removed |
-| B5 | Support and privacy mailboxes | The privacy notice and app point users to `support@` and `privacy@getkaamsetu.in`, but the domain has **no MX records**, so mail to them bounces today | **Owner**: Zoho Mail Forever Free (up to 5 mailboxes, $0) with its MX/SPF/DKIM records at GoDaddy | A test mail to each is received |
+| ~~B5~~ | ~~Support and privacy mailboxes~~ **Closed 2026-11-24** | Zoho Mail Free; MX/SPF/DKIM at GoDaddy; groups support@ and privacy@ deliver to rishabh@getkaamsetu.in; owner confirmed test mails to both arrived | Owner | DNS checked at ns77.domaincontrol.com |
 
 ## Should be done before inviting users (not hard blockers)
 
