@@ -15,8 +15,10 @@ on:
 permissions:
   contents: read
 
+# Group renamed 2026-11-24: two runs dispatched right after re-enabling the workflow stayed "queued" with zero jobs
+# and could not be cancelled or deleted, blocking every later run in the old group.
 concurrency:
-  group: workers
+  group: background-workers
   cancel-in-progress: false
 
 env:
