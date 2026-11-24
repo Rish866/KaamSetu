@@ -253,6 +253,26 @@ jobs:
               from private.email_outbox o left join public.profiles p on p.id = o.recipient_id
              where o.status = 'pending' group by 1,2,3,4,5 order by 6 desc"
 
+      - name: Who are the active accounts? (read-only; counts by type, no personal data)
+        if: inputs.action == 'email-test' || inputs.action == 'email-setup'
+        env:
+          DB_URL: ${{ steps.conn.outputs.url }}
+        run: |
+          psql "$DB_URL" -v ON_ERROR_STOP=1 -c "
+            select case when p.email like 'qa+admin-%@getkaamsetu.in' then 'temporary QA admin'
+                        when p.email like 'qa+%@getkaamsetu.in' then 'QA email account'
+                        when ltrim(coalesce(p.phone,''), '+') like '911000%' then 'QA phone account'
+                        when coalesce(p.email,'') = '' then 'no email (phone account)'
+                        else 'real email account' end as kind,
+                   p.status, count(*)
+              from public.profiles p group by 1,2 order by 1,2"
+
+      - name: Suppress queued mail to QA test addresses (those mailboxes do not exist; sending would bounce)
+        if: inputs.action == 'email-test' || inputs.action == 'email-setup'
+        env:
+          DB_URL: ${{ steps.conn.outputs.url }}
+        run: psql "$DB_URL" -v ON_ERROR_STOP=1 -f scripts/sql/suppress-qa-mail.sql
+
       - name: Send one test email directly through Resend (proves the key and the verified domain)
         if: inputs.action == 'email-test'
         env:

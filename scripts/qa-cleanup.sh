@@ -38,4 +38,5 @@ left_jobs=$(q "select count(*) from public.jobs where company_id in ($qa_compani
 left_cos=$(q "select count(*) from public.companies where id in ($qa_companies) and verification_status in ('approved','pending')")
 echo "after: users $left_users, active companies $left_cos, open jobs $left_jobs"
 [ "$left_users$left_jobs$left_cos" = 000 ] || { echo "::error::QA data left behind"; exit 1; }
+echo "queued mail to QA identities suppressed: $(psql "$DB_URL" -At -v ON_ERROR_STOP=1 -f "$(dirname "$0")/sql/suppress-qa-mail.sql" | grep -oE '[0-9]+$' || echo 0)"
 echo "Auth identities of deleted QA users are soft-deleted by the privacy worker (Background workers, every 15 min)."
