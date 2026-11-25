@@ -8,9 +8,9 @@ on:
   workflow_dispatch:
     inputs:
       action:
-        description: status | backup | dry-run | drift | apply | checks | functions | auth-probe | email-setup | email-test | restore-drill
+        description: status | backup | dry-run | drift | apply | checks | functions | auth-probe | email-setup | email-test | resume-go-live | restore-drill
         type: choice
-        options: [status, backup, dry-run, drift, apply, checks, functions, auth-probe, email-setup, email-test, restore-drill]
+        options: [status, backup, dry-run, drift, apply, checks, functions, auth-probe, email-setup, email-test, resume-go-live, restore-drill]
         default: status
       confirm:
         description: 'Required for apply: type APPLY zrexqtzhdkkupyxmfqxd'
@@ -198,7 +198,7 @@ jobs:
           supabase functions list --project-ref "$PROJECT_REF"
 
       - name: Project API keys for probes (masked)
-        if: inputs.action == 'auth-probe'
+        if: inputs.action == 'auth-probe' || inputs.action == 'resume-go-live'
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
         run: |
@@ -209,7 +209,7 @@ jobs:
           echo "ANON_KEY=$a" >> "$GITHUB_ENV"; echo "SERVICE_KEY=$k" >> "$GITHUB_ENV"
 
       - uses: actions/setup-node@v4
-        if: inputs.action == 'auth-probe'
+        if: inputs.action == 'auth-probe' || inputs.action == 'resume-go-live'
         with:
           node-version: 22
           cache: npm
@@ -285,6 +285,17 @@ jobs:
           code=$(curl -sS -o resp.json -w "%{http_code}" -X POST https://api.resend.com/emails -H "Authorization: Bearer $RESEND_API_KEY" -H 'Content-Type: application/json' -d "$body")
           echo "Resend API status: $code"; jq '{id, name, message}' resp.json
           [ "$code" = "200" ]
+
+      - name: Resume uploads go-live test (real ClamAV; uploads stay on only if every check passes)
+        if: inputs.action == 'resume-go-live'
+        env:
+          SUPABASE_URL: https://zrexqtzhdkkupyxmfqxd.supabase.co
+          DB_URL: ${{ steps.conn.outputs.url }}
+          CLAMSCAN_CMD: bash scripts/workers/clamscan-docker.sh
+          CLAMSCAN_VERSION_CMD: docker run --rm --entrypoint clamscan clamav/clamav:stable --version
+        run: |
+          docker pull -q clamav/clamav:stable && docker run --rm --entrypoint clamscan clamav/clamav:stable --version
+          npm ci --ignore-scripts && node scripts/resume-go-live.mjs
 
       - name: Download the latest production backup
         if: inputs.action == 'restore-drill'
