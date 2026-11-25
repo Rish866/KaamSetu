@@ -16,7 +16,7 @@ Status words: Written → Locally tested → CI tested → Merged → Deployed �
 | Email + phone sign-up | Production tested on the v1.3.0 schema (before the migration) | [auth-probe 44818660584](https://github.com/Rish866/KaamSetu/actions/runs/44818660584) |
 | Background workers | Running on schedule in production; ClamAV 1.5.5 loaded; nothing to scan (uploads off); email skipped (no provider) | [run 44859921097](https://github.com/Rish866/KaamSetu/actions/runs/44859921097) |
 | Backup restore drill | **Passed** into a new empty Supabase database (first attempt found a privilege issue in the restore procedure, now fixed) | [run 44868237416](https://github.com/Rish866/KaamSetu/actions/runs/44868237416), docs/drills.md |
-| Resume uploads | Switched **off** in production (by design until a production scan is verified) | migration 0006 |
+| Resume uploads | **On** since 2026-11-25 after the production ClamAV go-live test passed 9/9 (switch audited) | run 45597894838 |
 | Email delivery | **Production tested** 2026-11-24: Resend on `send.getkaamsetu.in`; Supabase Auth SMTP configured; test mail and password-reset mail received. 29 queued mails to QA test addresses suppressed and 20 to anonymised addresses failed before sending, so nothing bounced | runs 45366612896, 45367289078 |
 | Security headers | Sites does not apply `_headers`: no HSTS/CSP headers (CSP `<meta>` only). Owner: enable HSTS in Cloudflare | `curl -I` 2026-11-21 |
 | v1.4.0 tag / GitHub release / store builds | Not created | — |
@@ -26,6 +26,7 @@ Status words: Written → Locally tested → CI tested → Merged → Deployed �
 * 2026-11-20 22:08–22:35 UTC: owner merged PR #3, deployed the website, ran `backup` and `apply`. Migrations 0001–0006 applied; post-apply checks passed in the same run.
 * 2026-11-21: post-release verification found the missing-icon defect (PR #5) and ran the first restore drill.
 * 2026-11-21: live journey passed in production (run 44873263273).
+* 2026-11-25: workers triggered every 15 min by cron-job.org; resume uploads switched on after a passing production scan test.
 * 2026-11-24: inbound mail on Zoho (support@, privacy@ → rishabh@); outbound app mail on Resend; password reset verified end to end.
 * 2026-11-21: website moved from OpenAI Sites to GitHub Pages. Owner changed GoDaddy DNS (4 A records 185.199.108-111.153; www CNAME rish866.github.io) and enabled the custom domain + HTTPS. Icons fixed in production.
 

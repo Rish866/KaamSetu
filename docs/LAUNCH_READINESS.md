@@ -1,6 +1,6 @@
 # Launch readiness (public pilot on www.getkaamsetu.in)
 
-**Verdict (2026-11-24): not launch ready (legal review open).** The website and database release (v1.4.0) is live and its security checks
+**Verdict (2026-11-25): technically ready; public launch waits only for the legal review (B4).** The website and database release (v1.4.0) is live and its security checks
 pass, but the items marked **Blocker** below must be closed first. Each blocker names who can close it.
 
 ## Blockers
@@ -17,7 +17,7 @@ pass, but the items marked **Blocker** below must be closed first. Each blocker 
 
 | Item | Who | Notes |
 |------|-----|-------|
-| Resume uploads | Engineer + an admin | Off by design. After B3: upload a test PDF as the QA candidate with uploads on, confirm the ClamAV worker marks it `clean`, then leave uploads on. Decide with the lawyer whether GitHub runners may process resumes |
+| Resume uploads | Done | **Switched on 2026-11-25** after the production go-live test passed 9/9 (run 45597894838): clean PDF → clean, downloadable by its owner only; EICAR in a DOCX → infected, never downloadable; disguised .exe → rejected; anonymous and other users refused. Live journey with a real upload: run 45598238952. Lawyer still to confirm GitHub runners as a resume processor |
 | Canonical redirect and HTTPS | **Done** | GitHub Pages: apex → www 301, HTTP → HTTPS 301, certificate auto-renewed. GitHub Pages does not send an HSTS header and does not support custom headers; the CSP `<meta>` tag applies |
 | Supabase plan / PITR | **Owner** | Free plan has no daily backups or PITR. The `backup` action and restore drill work, but they are manual |
 | Error monitoring | **Owner** decision | Sentry is not installed (a new data processor, needs legal review) |
@@ -42,4 +42,4 @@ pass, but the items marked **Blocker** below must be closed first. Each blocker 
 * Pilot recruitment and devices (step 10).
 
 ## Known operational limits
-* GitHub runs the 15-minute "Background workers" schedule irregularly (observed: about every 6 hours). Sign-in emails (reset, verification) are sent by Supabase immediately and are not affected. Notification emails, account clean-up and resume scans can wait hours. Before resume uploads are switched on, add an external trigger (for example cron-job.org calling the workflow dispatch API) so scans run within minutes.
+* Background workers run every 15 minutes via cron-job.org (owner account; fine-grained token, Actions read/write on this repository only, 1-year expiry), because GitHub's own schedule is irregular (about every 6 hours). Verified 2026-11-25 10:15 and 10:30 UTC. Renew the token before it expires; if runs stop, check the job history (204 OK, 401 expired token).
