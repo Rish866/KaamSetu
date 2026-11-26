@@ -1,5 +1,7 @@
 # Product upgrade plan (investor feedback, 2026-11-26)
 
+**Status: all five parts deployed to production on 2026-11-26.** Remaining before switching on hire fees or inviting users: legal sign-off on pack v2, GST/invoicing advice.
+
 Approved by the owner on 2026-11-26 with these defaults: hire fees ₹0 and switched off until the owner sets them,
 jobs auto-pause after 30 days without re-confirmation, public employer scorecards only after 5 applications or 3 offers.
 Production database changes are applied only after CI, a dry run and the owner's go-ahead.
@@ -10,7 +12,7 @@ Production database changes are applied only after CI, a dry run and the owner's
 | 2. Offer and joining milestones | offer issued/accepted/declined/withdrawn, joined day 1, no-show, retained day 15/30, left before day 30; both sides confirm, 7-day auto-confirm, disputes decided by admins with a reason | **Deployed and production tested 2026-11-26**: migration applied (run 45788629867, backup production-backup-20261126T090458Z), live journey 25/25 incl. accept → joined → confirmed (run 45789465170) |
 | 3. Employer accountability scorecard | median response time, 7-day response rate, offers honoured, hires who joined, day-30 retention; "new employer" below the thresholds; 25-day reminder and 30-day auto-pause | **Deployed and production tested 2026-11-26**: migration applied (run 45813319419, backup production-backup-20261126T114502Z), live journey 26/26 (run 45814166234) |
 | 4. Outcome-based hiring ledger | pending_milestone → payable → paid / waived / disputed / void, audited; candidates never charged; fees off and ₹0 until an admin sets them; no payment gateway yet | **Deployed 2026-11-26** (fees OFF): migration applied (run 45819650667, backup production-backup-20261126T122645Z), live journey passed |
-| 5. DPDP | "joining verification" consent (asked at offer acceptance, enforced for every joining record); export v2 with hiring records and place names; deletion closes open reports and removes personal notes; updated notice (2026-11-26.2) and legal pack v2 | **Written, tested locally** (PR) |
+| 5. DPDP | "joining verification" consent (asked at offer acceptance, enforced for every joining record); export v2 with hiring records and place names; deletion closes open reports and removes personal notes; updated notice (2026-11-26.2) and legal pack v2 | **Deployed and production tested 2026-11-26**: migration applied (run 45825052826, backup production-backup-20261126T130132Z), live journey 26/26 (run 45826031540) |
 
 ## Part 1 decisions
 * Location score: area or PIN match 100, same city 85, same district 75, "entire state" preference 70, otherwise 0

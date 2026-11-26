@@ -10,7 +10,7 @@ pass, but the items marked **Blocker** below must be closed first. Each blocker 
 | ~~B1~~ | ~~Icons missing~~ **Closed 2026-11-21** | Site moved to GitHub Pages; all assets served | Engineer + owner | `verify-production.mjs` asset check passes |
 | ~~B2~~ | ~~Email delivery~~ **Closed 2026-11-24** | Resend (free) on verified `send.getkaamsetu.in`; Supabase Auth SMTP → smtp.resend.com; direct test mail and a real password-reset mail arrived in the Zoho inbox (owner confirmed); worker runs with the provider configured | Owner + engineer | email-test run 45366612896, email-setup run 45367289078, worker run 45390622218 |
 | ~~B3~~ | ~~End-to-end journey on the live site~~ **Closed 2026-11-21** | Passed in production: 24/24 (14 journey steps + 10 sign-in/security tests), QA data cleaned up afterwards | Engineer | [run 44873263273](https://github.com/Rish866/KaamSetu/actions/runs/44873263273) |
-| B4 | Legal texts are drafts | Privacy notice, terms and consent wording under the DPDP Act need a lawyer's approval before real personal data is collected at scale | **Owner** + lawyer (step 7) | Lawyer's written sign-off; drafts banner removed |
+| B4 | Legal texts are drafts | Privacy notice, terms and consent wording (now including joining confirmations, employer reliability figures and hire fees) need a lawyer's approval | **Owner** + lawyer: send `docs/legal-review/KaamSetu-legal-review-2026-11-26-v2.docx` | Lawyer's written sign-off; drafts banner removed |
 | ~~B5~~ | ~~Support and privacy mailboxes~~ **Closed 2026-11-24** | Zoho Mail Free; MX/SPF/DKIM at GoDaddy; groups support@ and privacy@ deliver to rishabh@getkaamsetu.in; owner confirmed test mails to both arrived | Owner | DNS checked at ns77.domaincontrol.com |
 
 ## Should be done before inviting users (not hard blockers)
@@ -43,3 +43,6 @@ pass, but the items marked **Blocker** below must be closed first. Each blocker 
 
 ## Known operational limits
 * Background workers run every 15 minutes via cron-job.org (owner account; fine-grained token, Actions read/write on this repository only, 1-year expiry), because GitHub's own schedule is irregular (about every 6 hours). Verified 2026-11-25 10:15 and 10:30 UTC. Renew the token before it expires; if runs stop, check the job history (204 OK, 401 expired token).
+
+## Before switching on hire fees
+GST registration and invoice format (CA), payment collection method, employer fee terms approved by the lawyer. Fees are OFF (₹0) in production until then.
