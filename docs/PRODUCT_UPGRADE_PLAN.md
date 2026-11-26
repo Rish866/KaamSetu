@@ -7,7 +7,7 @@ Production database changes are applied only after CI, a dry run and the owner's
 | Part | Scope | Status |
 |------|-------|--------|
 | 1. Pan-India locations | 36 states/UTs, 737 districts, 19,300 PIN codes; type-ahead; job search by places, whole states, PIN prefix, remote; discovery by place; hierarchical location score; India-wide copy | **Deployed and production tested 2026-11-26**: migration applied (run 45774730159, backup production-backup-20261126T072158Z), website build 9e79b0f live, live journey 24/24 (run 45775467310) |
-| 2. Offer and joining milestones | offer issued/accepted/declined/withdrawn, joined day 1, no-show, retained day 15/30, left before day 30; both sides confirm, 7-day auto-confirm, disputes decided by admins with a reason | **Written, tested locally** (PR) |
+| 2. Offer and joining milestones | offer issued/accepted/declined/withdrawn, joined day 1, no-show, retained day 15/30, left before day 30; both sides confirm, 7-day auto-confirm, disputes decided by admins with a reason | **Deployed and production tested 2026-11-26**: migration applied (run 45788629867, backup production-backup-20261126T090458Z), live journey 25/25 incl. accept → joined → confirmed (run 45789465170) |
 | 3. Employer accountability scorecard | median response time, 7-day response rate, offer-honoured and joining rates, "new employer" below the thresholds, 30-day auto-pause | Planned |
 | 4. Outcome-based hiring ledger | pending_milestone → payable → paid / waived / disputed, audited; candidates never charged; no payment gateway yet | Planned |
 | 5. DPDP | "joining verification" consent purpose; export and deletion cover new tables; updated notice and legal pack | Planned |
