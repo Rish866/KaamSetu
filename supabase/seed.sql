@@ -3,11 +3,7 @@ insert into public.job_categories (name) values
   ('Administration'), ('Manufacturing')
 on conflict (name) do nothing;
 
-insert into public.locations (city, locality) values
-  ('Mumbai', null), ('Mumbai', 'Andheri'), ('Mumbai', 'Powai'),
-  ('Navi Mumbai', null), ('Navi Mumbai', 'Vashi'), ('Navi Mumbai', 'Airoli'),
-  ('Thane', null), ('Pune', null), ('Pune', 'Hinjawadi'), ('Pune', 'Kharadi')
-on conflict (city, locality) do nothing;
+-- Locations (all of India) are created by migration 202611260001_pan_india_locations.
 
 insert into public.skills (name) values
   ('Customer support'), ('CRM'), ('English'), ('Inside sales'),

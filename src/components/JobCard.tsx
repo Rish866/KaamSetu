@@ -7,7 +7,7 @@ import { colors } from '../theme';
 import { Card, Pill, PrimaryButton } from './ui';
 
 export type FeedJob = {
-  job_id: string; title: string; company_name: string; company_verified: boolean; city: string | null; locality: string | null; work_mode: string;
+  job_id: string; title: string; company_name: string; company_verified: boolean; city: string | null; locality: string | null; location_label?: string | null; work_mode: string;
   employment_type: string; salary_min: number; salary_max: number; salary_period: 'monthly' | 'annual'; experience_min_months: number;
   published_at: string | null; skills: string[]; saved: boolean; applied: boolean; score: number | null; eligible: boolean;
 };
@@ -19,7 +19,7 @@ export function JobCard({ job, onOpen, onSave }: { job: FeedJob; onOpen: () => v
       <View style={{ flex: 1, gap: 3 }}>
         <Text accessibilityRole="header" style={styles.title}>{job.title}</Text>
         <View style={styles.row}><Text style={styles.company}>{job.company_name}</Text>{job.company_verified && <Ionicons accessibilityLabel="Verified company" name="checkmark-circle" size={16} color={colors.teal} />}</View>
-        <Text style={styles.meta}>{formatLocation(job.city, job.locality, job.work_mode)} · {labelize(job.work_mode)} · {labelize(job.employment_type)} · {timeAgo(job.published_at)}</Text>
+        <Text style={styles.meta}>{job.location_label ?? formatLocation(job.city, job.locality, job.work_mode)} · {labelize(job.work_mode)} · {labelize(job.employment_type)} · {timeAgo(job.published_at)}</Text>
       </View>
       <View accessibilityLabel={`Match score ${job.score ?? 'unavailable'} percent`} style={[styles.score, !job.eligible && styles.scoreOff]}><Text style={styles.scoreValue}>{job.score ?? '–'}%</Text><Text style={styles.scoreLabel}>{job.eligible ? 'match' : 'outside prefs'}</Text></View>
     </View>

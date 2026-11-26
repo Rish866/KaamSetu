@@ -29,6 +29,12 @@ export async function inCard(p: Page, text: string, button: string | RegExp) {
   const c = card(p, text, button);
   await c.getByRole('button', typeof button === 'string' ? { name: button, exact: true } : { name: button }).last().click();
 }
+/** Type into a location type-ahead and pick a suggestion (any place in India). */
+export async function choosePlace(p: Page, field: string, query: string, option: string) {
+  await p.getByRole('textbox', { name: field }).fill(query);
+  await p.getByRole('button', { name: option, exact: true }).first().click();
+  await expect(p.getByRole('button', { name: `Remove ${option}`, exact: true })).toBeVisible();
+}
 export async function confirmDialog(p: Page, label: string, why?: string) {
   if (why) await p.getByRole('textbox', { name: /Reason/ }).last().fill(why);
   await btn(p, label).click();

@@ -1,8 +1,10 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import { Pressable, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { LocationPicker } from '../components/LocationPicker';
 import { Card, Logo, PrimaryButton } from '../components/ui';
 import { friendlyError } from '../lib/format';
+import { loadPlaces, type Place } from '../lib/places';
 import { supabase } from '../lib/supabase';
 import { colors } from '../theme';
 
@@ -15,7 +17,6 @@ export default function PostJobScreen() {
   const [companyId, setCompanyId] = useState<string | null>(null);
   const [approved, setApproved] = useState(false);
   const [userId, setUserId] = useState<string | null>(null);
-  const [locations, setLocations] = useState<Option[]>([]);
   const [skills, setSkills] = useState<Option[]>([]);
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
@@ -25,7 +26,7 @@ export default function PostJobScreen() {
   const [expMax, setExpMax] = useState('');
   const [workMode, setWorkMode] = useState<(typeof workModes)[number][0]>('hybrid');
   const [employmentType, setEmploymentType] = useState<(typeof employmentTypes)[number][0]>('full_time');
-  const [locationId, setLocationId] = useState<string | null>(null);
+  const [place, setPlace] = useState<Place | null>(null);
   const [skillIds, setSkillIds] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
@@ -38,18 +39,14 @@ export default function PostJobScreen() {
     if (!data) return router.replace('/employer');
     setCompanyId(data.company_id);
     setApproved((data.companies as unknown as { verification_status: string } | null)?.verification_status === 'approved');
-    const [loc, sk] = await Promise.all([
-      supabase.from('locations').select('id, city, locality').eq('active', true).order('city').order('locality', { nullsFirst: true }),
-      supabase.from('skills').select('id, name').eq('active', true).order('name'),
-    ]);
-    setLocations((loc.data ?? []).map((l) => ({ id: l.id, label: l.locality ? `${l.locality}, ${l.city}` : l.city })));
+    const sk = await supabase.from('skills').select('id, name').eq('active', true).order('name');
     setSkills((sk.data ?? []).map((k) => ({ id: k.id, label: k.name })));
     if (editId) {
       const [j, js] = await Promise.all([supabase.from('jobs').select('title,description,salary_min,salary_max,experience_min_months,experience_max_months,work_mode,employment_type,location_id,status').eq('id', editId).eq('company_id', data.company_id).single(), supabase.from('job_skills').select('skill_id').eq('job_id', editId)]);
       if (j.error || !j.data || !['draft', 'rejected'].includes(j.data.status)) return setMessage('Only drafts and rejected jobs can be edited.');
       const d = j.data;
       setTitle(d.title); setDescription(d.description); setSalaryMin(String(d.salary_min)); setSalaryMax(String(d.salary_max)); setExpMin(String(d.experience_min_months / 12));
-      setExpMax(d.experience_max_months === null ? '' : String(d.experience_max_months / 12)); setWorkMode(d.work_mode); setEmploymentType(d.employment_type); setLocationId(d.location_id); setSkillIds((js.data ?? []).map((x) => x.skill_id));
+      setExpMax(d.experience_max_months === null ? '' : String(d.experience_max_months / 12)); setWorkMode(d.work_mode); setEmploymentType(d.employment_type); setPlace((await loadPlaces([d.location_id]))[0] ?? null); setSkillIds((js.data ?? []).map((x) => x.skill_id));
     }
   }
 
@@ -64,12 +61,12 @@ export default function PostJobScreen() {
     if (description.trim().length < 50) return setMessage('Describe the role in at least 50 characters.');
     if (!Number.isFinite(min) || !Number.isFinite(max) || min <= 0 || max < min) return setMessage('Enter a valid annual salary range. Salary must be visible to candidates.');
     if (!Number.isFinite(eMin) || eMin < 0 || (eMax !== null && (!Number.isFinite(eMax) || eMax < eMin))) return setMessage('Enter a valid experience range in years.');
-    if (workMode !== 'remote' && !locationId) return setMessage('Choose the job location.');
+    if (workMode !== 'remote' && !place) return setMessage('Choose where the job is: city, area or PIN code.');
     if (skillIds.length === 0) return setMessage('Choose at least one required skill.');
     setBusy(true); setMessage(null);
     const payload = {
       title: title.trim(), description: description.trim(), salary_min: min, salary_max: max, salary_period: 'annual',
-      experience_min_months: eMin, experience_max_months: eMax, location_id: workMode === 'remote' ? null : locationId, work_mode: workMode, employment_type: employmentType, vacancies: 1,
+      experience_min_months: eMin, experience_max_months: eMax, location_id: workMode === 'remote' ? null : place?.id ?? null, work_mode: workMode, employment_type: employmentType, vacancies: 1,
     };
     let jobId = editId ?? null;
     if (jobId) {
@@ -98,7 +95,9 @@ export default function PostJobScreen() {
     <Field label="Description" value={description} onChangeText={setDescription} placeholder="Describe the responsibilities, requirements and work schedule" multiline />
     <Choice label="Work mode" options={workModes.map(([id, label]) => ({ id, label }))} selected={[workMode]} onToggle={(id) => setWorkMode(id as typeof workMode)} />
     <Choice label="Employment type" options={employmentTypes.map(([id, label]) => ({ id, label }))} selected={[employmentType]} onToggle={(id) => setEmploymentType(id as typeof employmentType)} />
-    {workMode !== 'remote' && <Choice label="Location" options={locations} selected={locationId ? [locationId] : []} onToggle={setLocationId} />}
+    {workMode !== 'remote' && <LocationPicker label="Job location" value={place ? [place] : []} onChange={(v) => setPlace(v[0] ?? null)} kinds={['district', 'city', 'locality', 'pin']}
+      placeholder="Type the city, area or PIN code" hint="Anywhere in India. A PIN code or area helps candidates nearby find the job." />}
+    {workMode === 'remote' && <Text style={styles.sub}>Remote jobs are shown to candidates anywhere in India.</Text>}
     <Choice label="Required skills" options={skills} selected={skillIds} onToggle={toggle} />
     <View style={styles.row}><Field label="Minimum annual salary (₹)" value={salaryMin} onChangeText={setSalaryMin} keyboardType="number-pad" placeholder="500000" /><Field label="Maximum annual salary (₹)" value={salaryMax} onChangeText={setSalaryMax} keyboardType="number-pad" placeholder="700000" /></View>
     <View style={styles.row}><Field label="Minimum experience (years)" value={expMin} onChangeText={setExpMin} keyboardType="decimal-pad" /><Field label="Maximum experience (years, optional)" value={expMax} onChangeText={setExpMax} keyboardType="decimal-pad" /></View>

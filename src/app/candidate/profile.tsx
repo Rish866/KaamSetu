@@ -1,19 +1,21 @@
 import React, { useState } from 'react';
 import { Image, StyleSheet, Text, View } from 'react-native';
 import { AppShell } from '../../components/AppShell';
+import { LocationPicker } from '../../components/LocationPicker';
 import { Banner, Chips, ConfirmDialog, Field, Option, Row, SectionHead, StateView, unwrap, useLoad } from '../../components/kit';
 import { Card, Pill, PrimaryButton } from '../../components/ui';
 import { NOTICE_VERSION } from '../../content/legal';
 import { MAX_PHOTO_BYTES, MAX_RESUME_BYTES, openWhenReady, PHOTO_TYPES, pickFile, RESUME_TYPES, resumeLink, uploadResume } from '../../lib/files';
 import { formatExperience, formatSalaryAmount, friendlyError, labelize } from '../../lib/format';
 import { usePlatformFlags } from '../../lib/platform';
+import { loadPlaces, type Place } from '../../lib/places';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../state/AuthContext';
 import { colors } from '../../theme';
 
 type Profile = { headline: string | null; experience_months: number; current_location_id: string | null; salary_min: number | null; current_salary: number | null; salary_period: 'monthly' | 'annual';
   notice_days: number | null; discovery_enabled: boolean; employment_status: string | null; work_modes: string[]; employment_types: string[]; photo_path: string | null };
-type Bundle = { profile: Profile; skills: string[]; locations: { location_id: string; preference_rank: number }[]; education: any[]; experience: any[]; certs: any[]; languages: any[]; resumes: any[]; extraction: any | null };
+type Bundle = { profile: Profile; current: Place | null; preferred: Place[]; skills: string[]; locations: { location_id: string; preference_rank: number }[]; education: any[]; experience: any[]; certs: any[]; languages: any[]; resumes: any[]; extraction: any | null };
 const statuses = [['employed', 'Employed'], ['unemployed', 'Not working'], ['student', 'Student'], ['freelancing', 'Freelancing'], ['notice_period', 'Serving notice']].map(([id, label]) => ({ id, label }));
 const modes = [['onsite', 'On-site'], ['hybrid', 'Hybrid'], ['remote', 'Remote']].map(([id, label]) => ({ id, label }));
 const types = [['full_time', 'Full-time'], ['part_time', 'Part-time'], ['contract', 'Contract'], ['internship', 'Internship']].map(([id, label]) => ({ id, label }));
@@ -23,8 +25,8 @@ const num = (v: string) => (v.trim() === '' ? null : Number(v.replace(/[^\d.]/g,
 export default function ProfileScreen() {
   const { session, access } = useAuth(); const uid = session!.user.id;
   const taxonomy = useLoad(async () => {
-    const [l, s] = await Promise.all([supabase.from('locations').select('id,city,locality').eq('active', true).order('city').order('locality', { nullsFirst: true }), supabase.from('skills').select('id,name').eq('active', true).order('name')]);
-    return { locations: (unwrap(l) ?? []).map((x) => ({ id: x.id, label: x.locality ? `${x.locality}, ${x.city}` : x.city })) as Option[], skills: (unwrap(s) ?? []).map((x) => ({ id: x.id, label: x.name })) as Option[] };
+    const s = await supabase.from('skills').select('id,name').eq('active', true).order('name');
+    return { skills: (unwrap(s) ?? []).map((x) => ({ id: x.id, label: x.name })) as Option[] };
   }, []);
   const bundle = useLoad(async (): Promise<Bundle> => {
     const [p, cs, cl, ed, ex, ce, la, re, xt] = await Promise.all([
@@ -33,19 +35,21 @@ export default function ProfileScreen() {
       supabase.from('candidate_experience').select('*').eq('candidate_id', uid).order('start_date', { ascending: false }), supabase.from('candidate_certifications').select('*').eq('candidate_id', uid),
       supabase.from('candidate_languages').select('*').eq('candidate_id', uid), supabase.from('resumes').select('id,original_name,byte_size,scan_status,scan_detail,parse_status,active,created_at,storage_path').eq('candidate_id', uid).order('created_at', { ascending: false }),
       supabase.from('resume_extractions').select('*').eq('candidate_id', uid).eq('status', 'pending_review').maybeSingle()]);
-    return { profile: unwrap(p) as unknown as Profile, skills: (unwrap(cs) ?? []).map((r) => r.skill_id), locations: unwrap(cl) ?? [], education: unwrap(ed) ?? [], experience: unwrap(ex) ?? [], certs: unwrap(ce) ?? [], languages: unwrap(la) ?? [], resumes: unwrap(re) ?? [], extraction: unwrap(xt) };
+    const profile = unwrap(p) as unknown as Profile; const prefs = unwrap(cl) ?? [];
+    const [current, preferred] = await Promise.all([loadPlaces([profile.current_location_id]), loadPlaces(prefs.map((l) => l.location_id))]);
+    return { profile, current: current[0] ?? null, preferred, skills: (unwrap(cs) ?? []).map((r) => r.skill_id), locations: prefs, education: unwrap(ed) ?? [], experience: unwrap(ex) ?? [], certs: unwrap(ce) ?? [], languages: unwrap(la) ?? [], resumes: unwrap(re) ?? [], extraction: unwrap(xt) };
   }, [uid]);
   const completion = useLoad(async () => unwrap(await supabase.rpc('my_profile_completion')) as { percent: number; missing: string[] }, []);
   const photo = useLoad(async () => { const path = bundle.data?.profile.photo_path; if (!path) return null; const { data } = await supabase.storage.from('profile-photos').createSignedUrl(path, 300); return data?.signedUrl ?? null; }, [bundle.data?.profile.photo_path]);
 
   const flags = usePlatformFlags();
   const [msg, setMsg] = useState<{ tone: 'error' | 'success'; text: string } | null>(null);
-  const [form, setForm] = useState<{ headline: string; years: string; notice: string; expected: string; current: string; period: 'monthly' | 'annual'; status: string | null; modes: string[]; types: string[]; loc: string | null; prefs: string[]; skills: string[] } | null>(null);
+  const [form, setForm] = useState<{ headline: string; years: string; notice: string; expected: string; current: string; period: 'monthly' | 'annual'; status: string | null; modes: string[]; types: string[]; loc: Place | null; prefs: Place[]; skills: string[] } | null>(null);
   const [dirtyKey, setDirtyKey] = useState<unknown>(null);
   if (bundle.data && dirtyKey !== bundle.data) {
     const b = bundle.data; setDirtyKey(b);
     setForm({ headline: b.profile.headline ?? '', years: b.profile.experience_months ? String(b.profile.experience_months / 12) : '', notice: b.profile.notice_days?.toString() ?? '', expected: b.profile.salary_min?.toString() ?? '', current: b.profile.current_salary?.toString() ?? '',
-      period: b.profile.salary_period, status: b.profile.employment_status, modes: b.profile.work_modes, types: b.profile.employment_types, loc: b.profile.current_location_id, prefs: b.locations.map((l) => l.location_id), skills: b.skills });
+      period: b.profile.salary_period, status: b.profile.employment_status, modes: b.profile.work_modes, types: b.profile.employment_types, loc: b.current, prefs: b.preferred, skills: b.skills });
   }
   const refresh = async () => { await Promise.all([bundle.reload(), completion.reload()]); };
   const bad = (e: { message?: string; code?: string }) => setMsg({ tone: 'error', text: e instanceof Error && !('code' in e) ? e.message : friendlyError(e) });
@@ -58,10 +62,10 @@ export default function ProfileScreen() {
     if (years < 0 || years > 60) return setMsg({ tone: 'error', text: 'Enter experience between 0 and 60 years.' });
     if (notice !== null && (notice < 0 || notice > 365)) return setMsg({ tone: 'error', text: 'Notice period must be between 0 and 365 days.' });
     const { error } = await supabase.from('candidate_profiles').update({ headline: form.headline.trim() || null, experience_months: Math.round(years * 12), notice_days: notice, salary_min: expected, current_salary: current, salary_period: form.period,
-      employment_status: form.status, work_modes: form.modes, employment_types: form.types, current_location_id: form.loc, updated_at: new Date().toISOString() }).eq('user_id', uid);
+      employment_status: form.status, work_modes: form.modes, employment_types: form.types, current_location_id: form.loc?.id ?? null, updated_at: new Date().toISOString() }).eq('user_id', uid);
     if (error) return bad(error);
     await supabase.from('candidate_locations').delete().eq('candidate_id', uid);
-    if (form.prefs.length) { const { error: e2 } = await supabase.from('candidate_locations').insert(form.prefs.slice(0, 10).map((location_id, i) => ({ candidate_id: uid, location_id, preference_rank: i + 1 }))); if (e2) return bad(e2); }
+    if (form.prefs.length) { const { error: e2 } = await supabase.from('candidate_locations').insert(form.prefs.slice(0, 10).map((place, i) => ({ candidate_id: uid, location_id: place.id, preference_rank: i + 1 }))); if (e2) return bad(e2); }
     await refresh(); setMsg({ tone: 'success', text: 'Profile saved.' }); // only after the reload has reset the form
   }
   async function saveSkills() {
@@ -99,9 +103,10 @@ export default function ProfileScreen() {
           <Row><Field label="Total experience (years)" value={form.years} onChangeText={(years) => setForm({ ...form, years })} keyboardType="decimal-pad" /><Field label="Notice period (days)" value={form.notice} onChangeText={(notice) => setForm({ ...form, notice })} keyboardType="number-pad" /></Row>
           <Chips label="Salary is quoted" options={[{ id: 'annual', label: 'Per year' }, { id: 'monthly', label: 'Per month' }]} selected={[form.period]} onToggle={(p) => setForm({ ...form, period: p as 'annual' | 'monthly' })} />
           <Row><Field label="Expected salary (₹)" value={form.expected} onChangeText={(expected) => setForm({ ...form, expected })} keyboardType="number-pad" /><Field label="Current salary (₹, optional, private)" value={form.current} onChangeText={(current) => setForm({ ...form, current })} keyboardType="number-pad" hint="Never shown to employers or used for matching." /></Row>
-          <Chips label="Where do you live now?" options={taxonomy.data.locations} selected={form.loc ? [form.loc] : []} onToggle={(l) => setForm({ ...form, loc: form.loc === l ? null : l })} />
-          <Chips label="Preferred locations (tap in order of preference)" options={taxonomy.data.locations} selected={form.prefs} onToggle={(l) => setForm({ ...form, prefs: toggle(form.prefs, l) })} />
-          <Text style={styles.muted}>{form.prefs.length ? `Ranked: ${form.prefs.map((p, i) => `${i + 1}. ${taxonomy.data!.locations.find((x) => x.id === p)?.label}`).join('  ')}` : 'No preferred locations yet.'}</Text>
+          <LocationPicker label="Where do you live now?" value={form.loc ? [form.loc] : []} onChange={(v) => setForm({ ...form, loc: v[0] ?? null })} kinds={['district', 'city', 'locality', 'pin']} placeholder="Type your city, area or PIN code" />
+          <LocationPicker label="Where would you like to work? (in order of preference)" value={form.prefs} onChange={(prefs) => setForm({ ...form, prefs })} max={10} ranked
+            hint="Add up to 10 places anywhere in India. Choose a whole state if you are open to any city in it. Your first choice counts most." />
+          {form.prefs.length === 0 && <Text style={styles.muted}>No preferred locations yet.</Text>}
           <Chips label="Work mode I accept" options={modes} selected={form.modes} onToggle={(m) => setForm({ ...form, modes: toggle(form.modes, m, 1) })} />
           <Chips label="Employment types I accept" options={types} selected={form.types} onToggle={(m) => setForm({ ...form, types: toggle(form.types, m, 1) })} />
           <PrimaryButton label="Save profile" icon="save-outline" onPress={saveBasics} />
@@ -129,7 +134,7 @@ export default function ProfileScreen() {
           <Text style={styles.muted}>Resume reading needs your permission in Settings. Nothing is added to your profile without your review.</Text></Card>
         <Card style={{ gap: 12 }}><SectionHead title="Preview" sub="What a verified employer sees if you enable discovery. Name, email, phone and resume are hidden." />
           <Text style={styles.previewTitle}>{b.profile.headline || 'Add a headline'}</Text>
-          <Text style={styles.muted}>{taxonomy.data.locations.find((l) => l.id === b.profile.current_location_id)?.label ?? 'Location not set'} · {formatExperience(b.profile.experience_months)} experience · notice {b.profile.notice_days ?? '–'} days</Text>
+          <Text style={styles.muted}>{b.current?.label ?? 'Location not set'} · {formatExperience(b.profile.experience_months)} experience · notice {b.profile.notice_days ?? '–'} days</Text>
           <Row>{b.skills.map((s) => <Pill key={s} tone="neutral">{taxonomy.data!.skills.find((x) => x.id === s)?.label ?? ''}</Pill>)}</Row>
           <Text style={styles.muted}>Expected: {b.profile.salary_min ? formatSalaryAmount(b.profile.salary_min, b.profile.salary_period) : 'not set'}</Text>
           <Row><Pill tone={b.profile.discovery_enabled ? 'teal' : 'neutral'}>{b.profile.discovery_enabled ? 'Discovery on' : 'Discovery off'}</Pill>

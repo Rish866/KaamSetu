@@ -14,7 +14,7 @@ test('experience formatting', () => {
   assert.equal(formatExperience(30), '2 yr 6 mo'); assert.equal(formatExperience(null), 'Not specified');
 });
 test('location formatting', () => {
-  assert.equal(formatLocation('Mumbai', 'Andheri'), 'Andheri, Mumbai'); assert.equal(formatLocation('Pune', null, 'remote'), 'Remote'); assert.equal(formatLocation(null, null), 'Location not specified');
+  assert.equal(formatLocation('Mumbai', 'Andheri'), 'Andheri, Mumbai'); assert.equal(formatLocation('Pune', null, 'remote'), 'Remote (anywhere in India)'); assert.equal(formatLocation(null, null), 'Location not specified');
 });
 test('local date-time parsing rejects impossible dates', () => {
   assert.ok(parseLocalDateTime('2026-12-01 14:30')); assert.equal(parseLocalDateTime('2026-02-30 10:00'), null);
@@ -37,4 +37,14 @@ test('small helpers', () => { assert.equal(labelize('full_time'), 'Full time'); 
 test('password policy', () => {
   assert.ok(validatePassword('short1A')); assert.ok(validatePassword('alllowercase123')); assert.ok(validatePassword('Password1234'));
   assert.equal(validatePassword('Maroon-Tiger-42x'), null);
+});
+
+test('place labels match the database wording', async () => {
+  const { placeLabel } = await import('../../src/lib/place-label.ts');
+  const base = { city: 'Pune', locality: null, district: 'Pune', state: 'Maharashtra', pincode: null };
+  assert.equal(placeLabel({ ...base, kind: 'district' }), 'Pune, Maharashtra');
+  assert.equal(placeLabel({ ...base, kind: 'city', city: 'Navi Mumbai', district: 'Thane' }), 'Navi Mumbai (Thane), Maharashtra');
+  assert.equal(placeLabel({ ...base, kind: 'state', city: 'Maharashtra' }), 'Maharashtra (entire state)');
+  assert.equal(placeLabel({ ...base, kind: 'pin', locality: 'Infotech Park', pincode: '411057' }), '411057 · Infotech Park, Pune, Maharashtra');
+  assert.equal(placeLabel({ ...base, kind: 'locality', city: 'Navi Mumbai', locality: 'Vashi', district: 'Thane' }), 'Vashi, Navi Mumbai, Maharashtra');
 });

@@ -2,7 +2,7 @@
 import test, { before } from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { createDb, failure, REAL } from './harness.mjs';
+import { createDb, failure, REAL, migrationFiles } from './harness.mjs';
 import { world, makeCompany, makeJob, makeCandidate } from './fixtures.mjs';
 
 let api, admin, co, job;
@@ -24,13 +24,13 @@ test('upgrade path: v1.3.0 production state migrates cleanly and keeps data', { 
   await old.as(cand, (s) => s('insert into public.candidate_profiles (user_id) values ($1)', [cand.id]));
   assert.equal((await old.q('select verification_status s from public.companies where id=$1', [cid])).rows[0].s, 'pending');
   await old.applyMigrations();
-  assert.equal(old.applied.at(-1), '202611200006_resume_upload_gate.sql');
+  assert.equal(old.applied.at(-1), migrationFiles().at(-1));
   assert.equal((await old.q('select verification_status s from public.companies where id=$1', [cid])).rows[0].s, 'draft', 'legacy pending company returns to draft');
   await old.as(emp, (s) => s(`select public.submit_company_verification($1,'domain','legacy.example')`, [cid]));
   assert.equal((await old.q('select count(*)::int n from public.notification_preferences')).rows[0].n, 2, 'preferences backfilled');
   const access = await old.as(cand, async (s) => (await s('select * from public.current_user_access()')).rows[0]);
   assert.deepEqual([access.account_kind, access.is_admin, access.status], ['candidate', false, 'active'], 'v1.3.0 password-auth RPC still works');
-  assert.equal((await old.as(null, async (s) => (await s('select public.schema_version() v')).rows[0].v)), '202611200006');
+  assert.equal((await old.as(null, async (s) => (await s('select public.schema_version() v')).rows[0].v)), migrationFiles().at(-1).slice(0, 12));
 });
 
 test('migrations are not re-runnable by accident: a second apply of 0004 fails loudly rather than silently', { skip: REAL && 'would mutate the shared real database' }, async () => {
