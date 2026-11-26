@@ -26,6 +26,7 @@ Status words: Written → Locally tested → CI tested → Merged → Deployed �
 * 2026-11-20 22:08–22:35 UTC: owner merged PR #3, deployed the website, ran `backup` and `apply`. Migrations 0001–0006 applied; post-apply checks passed in the same run.
 * 2026-11-21: post-release verification found the missing-icon defect (PR #5) and ran the first restore drill.
 * 2026-11-21: live journey passed in production (run 44873263273).
+* 2026-11-26: offer and joining milestones (migration 202611260002) applied and deployed; live journey 25/25.
 * 2026-11-26: Pan-India locations (migration 202611260001) applied and website deployed; live journey 24/24.
 * 2026-11-25: workers triggered every 15 min by cron-job.org; resume uploads switched on after a passing production scan test.
 * 2026-11-24: inbound mail on Zoho (support@, privacy@ → rishabh@); outbound app mail on Resend; password reset verified end to end.
