@@ -51,7 +51,7 @@ lawyer approval before public launch.
 * Export (`request_data_export`, version 2) includes hiring records and place names. Deletion closes open reports and removes notes the person wrote; confirmed outcomes stay without the person's name.
 * **[LEGAL]** legal basis (consent vs. legitimate use) for joining confirmations; publishing employer statistics; keeping anonymised outcomes after deletion; fee and invoicing terms.
 
-## Access log, reasons, alerts (added 2026-11-27, pending production)
+## Access log, reasons, alerts (live since 2026-11-26)
 * Settings → "Who used your data" lists, per purpose, the current consent (with one-tap withdrawal) and each access: an employer's search showing your masked profile, invitations, your resume being opened, your email/phone being revealed, joining records, and KaamSetu reading your resume. Employers cannot read this log.
 * Consent changes also write a PII-free audit event (purpose and notice version only).
 * Reasons for closing an application or hire come from a fixed list of neutral codes (no free-text labels about a person). They are shown to both sides and counted, without names, in reliability records and the admin funnel.
