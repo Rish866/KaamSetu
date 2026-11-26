@@ -81,7 +81,7 @@ begin
                    from unnest(array['employer_discovery', 'contact_sharing', 'resume_parsing', 'joining_verification', 'marketing']) with ordinality as x(pu, ord)
                    left join lateral (select action, created_at, notice_version from public.consent_records r where r.user_id = uid and r.purpose = x.pu
                                       order by created_at desc, id desc limit 1) c on true),
-    'events', coalesce((select jsonb_agg(e order by (e->>'at')::timestamptz desc) from (
+    'events', coalesce((select jsonb_agg(t.e order by (t.e->>'at')::timestamptz desc) from (select u.e from (
       select jsonb_build_object('purpose', 'employer_discovery', 'what', 'Saw your masked profile in candidate search', 'company', co.display_name, 'job', j.title, 'at', v.created_at) e
         from public.discovery_views v join public.companies co on co.id = v.company_id left join public.jobs j on j.id = v.job_id where v.candidate_id = uid
       union all
@@ -104,7 +104,7 @@ begin
       union all
       select jsonb_build_object('purpose', 'resume_parsing', 'what', 'KaamSetu read your resume to suggest profile details', 'company', null, 'job', null, 'at', x.created_at)
         from public.resume_extractions x where x.candidate_id = uid
-      limit lim) t), '[]'::jsonb));
+      ) u order by (u.e->>'at')::timestamptz desc limit lim) t), '[]'::jsonb));
 end $$;
 
 create or replace function public.schema_version()

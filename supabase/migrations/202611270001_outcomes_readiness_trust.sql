@@ -308,7 +308,7 @@ declare
   since timestamptz := now() - interval '365 days';
   resp_n integer; resp_median numeric; resp_7d integer;
   offers integer; withdrawn integer; joined integer; no_show integer; kept integer; left_early integer; active integer;
-  r jsonb; shown boolean; evidence jsonb; reasons jsonb; commit_days integer; commit_n integer; method text; verified_on timestamptz;
+  r jsonb; shown boolean; evidence jsonb; reasons jsonb; commit_days integer; commit_n integer; commit_total integer; method text; verified_on timestamptz;
 begin
   with apps as (
     select a.id, a.applied_at, a.candidate_id,
@@ -338,7 +338,7 @@ begin
   select count(*) into active from public.jobs j where j.company_id = p_company and private.job_is_public(j.id);
   select review_commitment_days into commit_days from public.companies where id = p_company;
   if commit_days is not null then
-    select count(*) filter (where e1 is not null and e1 <= a.applied_at + make_interval(days => commit_days)) into commit_n
+    select count(*) filter (where e1 is not null and e1 <= a.applied_at + make_interval(days => commit_days)), count(*) into commit_n, commit_total
       from public.applications a join public.jobs j on j.id = a.job_id
       cross join lateral (select min(e.created_at) e1 from public.application_events e where e.application_id = a.id and e.actor_id is distinct from a.candidate_id and e.to_stage <> 'applied') x
      where j.company_id = p_company and a.applied_at >= since and (x.e1 is not null or a.applied_at < now() - interval '7 days');
@@ -358,9 +358,9 @@ begin
 
   r := jsonb_build_object(
     'company_id', p_company, 'window_days', 365, 'active_jobs', active,
-    'verification', jsonb_build_object('method', case method when 'gstin' then 'GSTIN' when 'cin' then 'CIN' when 'domain' then 'Company domain' when 'other' then 'Official document' end,
+    'verification', jsonb_build_object('method', case method when 'gstin' then 'GSTIN' when 'cin' then 'CIN' when 'llpin' then 'LLPIN' when 'domain' then 'Company domain' when 'other' then 'Official document' end,
                                        'verified_on', verified_on::date),
-    'commitment', jsonb_build_object('review_days', commit_days, 'met_pct', case when commit_days is not null and resp_n >= 5 then round(100.0 * commit_n / resp_n) end),
+    'commitment', jsonb_build_object('review_days', commit_days, 'sample', commit_total, 'met_pct', case when commit_days is not null and commit_total >= 5 then round(100.0 * commit_n / commit_total) end),
     'evidence', evidence,
     'outcome_reasons', case when offers >= 3 or (joined + no_show) >= 3 or (kept + left_early) >= 3 then reasons else '{}'::jsonb end,
     'response', jsonb_build_object('sample', resp_n, 'shown', resp_n >= 5,

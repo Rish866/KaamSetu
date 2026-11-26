@@ -74,12 +74,12 @@ report_ms = fn('public.report_hiring_milestone',
    "  update public.hiring_milestones set outcome_tag = p_outcome_tag where id = mid;"),
 )
 scorecard = fn('private.company_scorecard',
-  ("  r jsonb; shown boolean;", "  r jsonb; shown boolean; evidence jsonb; reasons jsonb; commit_days integer; commit_n integer; method text; verified_on timestamptz;"),
+  ("  r jsonb; shown boolean;", "  r jsonb; shown boolean; evidence jsonb; reasons jsonb; commit_days integer; commit_n integer; commit_total integer; method text; verified_on timestamptz;"),
   ("  select count(*) into active from public.jobs j where j.company_id = p_company and private.job_is_public(j.id);",
    """  select count(*) into active from public.jobs j where j.company_id = p_company and private.job_is_public(j.id);
   select review_commitment_days into commit_days from public.companies where id = p_company;
   if commit_days is not null then
-    select count(*) filter (where e1 is not null and e1 <= a.applied_at + make_interval(days => commit_days)) into commit_n
+    select count(*) filter (where e1 is not null and e1 <= a.applied_at + make_interval(days => commit_days)), count(*) into commit_n, commit_total
       from public.applications a join public.jobs j on j.id = a.job_id
       cross join lateral (select min(e.created_at) e1 from public.application_events e where e.application_id = a.id and e.actor_id is distinct from a.candidate_id and e.to_stage <> 'applied') x
      where j.company_id = p_company and a.applied_at >= since and (x.e1 is not null or a.applied_at < now() - interval '7 days');
@@ -98,9 +98,9 @@ scorecard = fn('private.company_scorecard',
    where v.company_id = p_company and v.decision = 'approved' order by v.reviewed_at desc nulls last limit 1;"""),
   ("    'company_id', p_company, 'window_days', 365, 'active_jobs', active,",
    """    'company_id', p_company, 'window_days', 365, 'active_jobs', active,
-    'verification', jsonb_build_object('method', case method when 'gstin' then 'GSTIN' when 'cin' then 'CIN' when 'domain' then 'Company domain' when 'other' then 'Official document' end,
+    'verification', jsonb_build_object('method', case method when 'gstin' then 'GSTIN' when 'cin' then 'CIN' when 'llpin' then 'LLPIN' when 'domain' then 'Company domain' when 'other' then 'Official document' end,
                                        'verified_on', verified_on::date),
-    'commitment', jsonb_build_object('review_days', commit_days, 'met_pct', case when commit_days is not null and resp_n >= 5 then round(100.0 * commit_n / resp_n) end),
+    'commitment', jsonb_build_object('review_days', commit_days, 'sample', commit_total, 'met_pct', case when commit_days is not null and commit_total >= 5 then round(100.0 * commit_n / commit_total) end),
     'evidence', evidence,
     'outcome_reasons', case when offers >= 3 or (joined + no_show) >= 3 or (kept + left_early) >= 3 then reasons else '{}'::jsonb end,"""),
 )
@@ -366,7 +366,7 @@ begin
                    from unnest(array['employer_discovery', 'contact_sharing', 'resume_parsing', 'joining_verification', 'marketing']) with ordinality as x(pu, ord)
                    left join lateral (select action, created_at, notice_version from public.consent_records r where r.user_id = uid and r.purpose = x.pu
                                       order by created_at desc, id desc limit 1) c on true),
-    'events', coalesce((select jsonb_agg(e order by (e->>'at')::timestamptz desc) from (
+    'events', coalesce((select jsonb_agg(t.e order by (t.e->>'at')::timestamptz desc) from (select u.e from (
       select jsonb_build_object('purpose', 'employer_discovery', 'what', 'Saw your masked profile in candidate search', 'company', co.display_name, 'job', j.title, 'at', v.created_at) e
         from public.discovery_views v join public.companies co on co.id = v.company_id left join public.jobs j on j.id = v.job_id where v.candidate_id = uid
       union all
@@ -389,7 +389,7 @@ begin
       union all
       select jsonb_build_object('purpose', 'resume_parsing', 'what', 'KaamSetu read your resume to suggest profile details', 'company', null, 'job', null, 'at', x.created_at)
         from public.resume_extractions x where x.candidate_id = uid
-      limit lim) t), '[]'::jsonb));
+      ) u order by (u.e->>'at')::timestamptz desc limit lim) t), '[]'::jsonb));
 end $$;
 
 {VERSION('202611270002')}
