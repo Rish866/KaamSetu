@@ -200,7 +200,7 @@ test('20. candidate downloads a personal-data export', async () => {
   expect(file.suggestedFilename()).toMatch(/^kaamsetu-my-data-\d{4}-\d{2}-\d{2}\.json$/);
   const body = JSON.parse(readFileSync(await file.path(), 'utf8'));
   expect(body.account.email).toBe(cand.email);
-  expect(body.applications[0].stage).toBe('offer');
+  expect(body.applications[0].stage).toBe('hired'); // the candidate accepted the offer in step 19b
   expect(JSON.stringify(body)).not.toContain(emp.email);
 });
 
