@@ -18,13 +18,19 @@ const purposes: { id: string; title: string; text: string }[] = [
   { id: 'joining_verification', title: 'Confirm my joining with employers who hire me', text: 'Needed to accept an offer. KaamSetu records your joining and day-15/day-30 status and confirms them with that employer. Turning this off stops new records; earlier ones stay.' },
   { id: 'marketing', title: 'Send me tips and product news by email', text: 'Optional. Off unless you turn it on. Essential account and application emails are always sent.' },
 ];
+type LogEvent = { purpose: string; what: string; company: string | null; job: string | null; at: string };
+type AccessLog = { consents: { purpose: string; granted: boolean; since: string | null }[]; events: LogEvent[] };
+const purposeTitle: Record<string, string> = { employer_discovery: 'Employer search', contact_sharing: 'Email and phone', job_application: 'Applications you sent', joining_verification: 'Joining records', resume_parsing: 'Resume reading' };
 type Consent = { purpose: string; action: string; notice_version: string; created_at: string };
 
 export function SettingsView({ role }: { role: 'Candidate' | 'Employer' }) {
   const shown = role === 'Candidate' ? purposes : purposes.filter((p) => p.id === 'marketing');
   const { access, session, signOut } = useAuth();
   const consents = useLoad(async () => (unwrap(await supabase.from('consent_records').select('purpose,action,notice_version,created_at').order('created_at', { ascending: false }).order('id', { ascending: false })) ?? []) as Consent[], []);
-  const prefs = useLoad(async () => (unwrap(await supabase.from('notification_preferences').select('email_updates').maybeSingle()) as { email_updates: boolean } | null)?.email_updates ?? true, []);
+  const prefRow = useLoad(async () => unwrap(await supabase.from('notification_preferences').select('email_updates,job_alerts').maybeSingle()) as { email_updates: boolean; job_alerts: boolean } | null, []);
+  const prefs = { data: prefRow.data?.email_updates ?? (prefRow.loading ? undefined : true), reload: prefRow.reload };
+  const log = useLoad(async () => role === 'Candidate' ? (unwrap(await supabase.rpc('my_access_log', { p_limit: 200 })) as unknown as AccessLog) : null, [role]);
+  const [logOpen, setLogOpen] = useState(false);
   const requests = useLoad(async () => (unwrap(await supabase.from('privacy_requests').select('id,kind,status,created_at').order('created_at', { ascending: false }).limit(10)) ?? []) as { id: string; kind: string; status: string; created_at: string }[], []);
   const [msg, setMsg] = useState<{ tone: 'error' | 'success'; text: string } | null>(null);
   const [current, setCurrent] = useState(''); const [pw, setPw] = useState(''); const [pw2, setPw2] = useState(''); const [email, setEmail] = useState('');
@@ -34,7 +40,7 @@ export function SettingsView({ role }: { role: 'Candidate' | 'Employer' }) {
 
   async function setConsent(purpose: string, value: boolean) {
     const { error } = await supabase.rpc('set_consent', { p_purpose: purpose, p_granted: value, p_notice_version: NOTICE_VERSION });
-    if (error) return bad(error); await consents.reload(); ok(value ? 'Saved. You can withdraw this at any time.' : 'Withdrawn. This takes effect immediately.');
+    if (error) return bad(error); await Promise.all([consents.reload(), log.reload()]); ok(value ? 'Saved. You can withdraw this at any time.' : 'Withdrawn. This takes effect immediately.');
   }
   async function changePassword() {
     const problem = validatePassword(pw); if (problem) return setMsg({ tone: 'error', text: problem });
@@ -70,9 +76,25 @@ export function SettingsView({ role }: { role: 'Candidate' | 'Employer' }) {
         <PrimaryButton label={granted(p.id) ? 'On · Turn off' : 'Off · Turn on'} variant={granted(p.id) ? 'primary' : 'secondary'} onPress={() => setConsent(p.id, !granted(p.id))} /></View>)}</Card>
       <Card style={{ gap: 6 }}><Text style={styles.title}>Consent history</Text>{(consents.data ?? []).slice(0, 12).map((c, i) => <Text key={i} style={styles.muted}>{new Date(c.created_at).toLocaleString('en-IN')} · {c.purpose.replace(/_/g, ' ')} · {c.action}</Text>)}</Card>
     </StateView>
+    {role === 'Candidate' && <><SectionHead title="Who used your data" sub="Every time an employer saw your masked profile, invited you, opened your resume, viewed your contact details or recorded your joining, and every time KaamSetu read your resume." />
+      <StateView loading={log.loading} error={log.error} onRetry={log.reload}>
+        {log.data && <Card style={{ gap: 10 }}>
+          {Object.keys(purposeTitle).map((pu) => {
+            const ev = log.data!.events.filter((e) => e.purpose === pu); const c = log.data!.consents.find((x) => x.purpose === pu);
+            return <View key={pu} style={styles.consent}><View style={{ flex: 1 }}><Text style={styles.title}>{purposeTitle[pu]} · {ev.length} record{ev.length === 1 ? '' : 's'}</Text>
+              <Text style={styles.muted}>{ev[0] ? `Latest: ${ev[0].what}${ev[0].company ? ` · ${ev[0].company}` : ''} · ${new Date(ev[0].at).toLocaleString('en-IN')}` : 'No access yet.'}</Text>
+              {pu === 'job_application' && <Text style={styles.muted}>Shared because you applied. Withdraw an application to stop sharing your resume with that employer.</Text>}</View>
+              {c?.granted && <PrimaryButton label="Withdraw" variant="secondary" onPress={() => setConsent(pu, false)} />}</View>;
+          })}
+          <PrimaryButton label={logOpen ? 'Hide full log' : `Show full log (${log.data.events.length})`} variant="ghost" onPress={() => setLogOpen(!logOpen)} />
+          {logOpen && log.data.events.map((e, i) => <Text key={i} style={styles.muted}>{new Date(e.at).toLocaleString('en-IN')} · {e.what}{e.company ? ` · ${e.company}` : ''}{e.job ? ` · ${e.job}` : ''}</Text>)}
+        </Card>}
+      </StateView></>}
     <SectionHead title="Email" />
     <Card style={{ gap: 10 }}><View style={styles.consent}><View style={{ flex: 1 }}><Text style={styles.title}>Optional update emails</Text><Text style={styles.muted}>Optional: application viewed, interview confirmations and other non-urgent updates. Security emails and messages about shortlisting, interviews, offers and decisions are always sent. In-app notifications are unaffected.</Text></View>
-      <PrimaryButton label={prefs.data === false ? 'Off · Turn on' : 'On · Turn off'} variant="secondary" onPress={async () => { const { error } = await supabase.rpc('set_notification_preferences', { p_email_updates: prefs.data === false }); if (error) return bad(error); await prefs.reload(); ok('Email preference saved.'); }} /></View></Card>
+      <PrimaryButton label={prefs.data === false ? 'Off · Turn on' : 'On · Turn off'} variant="secondary" onPress={async () => { const { error } = await supabase.rpc('set_notification_preferences', { p_email_updates: prefs.data === false }); if (error) return bad(error); await prefs.reload(); ok('Email preference saved.'); }} /></View>
+      {role === 'Candidate' && <View style={styles.consent}><View style={{ flex: 1 }}><Text style={styles.title}>Job alerts</Text><Text style={styles.muted}>At most one message a day when a newly posted job from a verified employer strongly matches your profile (score 70% or more). Shown in the app; also emailed if optional update emails are on.</Text></View>
+        <PrimaryButton label={prefRow.data?.job_alerts ? 'On · Turn off' : 'Off · Turn on'} variant={prefRow.data?.job_alerts ? 'primary' : 'secondary'} onPress={async () => { const { error } = await supabase.rpc('set_job_alerts', { p_on: !prefRow.data?.job_alerts }); if (error) return bad(error); await prefRow.reload(); ok(prefRow.data?.job_alerts ? 'Job alerts turned off.' : 'Job alerts turned on.'); }} /></View>}</Card>
     <SectionHead title="Account security" />
     <Card style={{ gap: 12 }}>
       <Text style={styles.muted}>Signed in as {session?.user.email ?? session?.user.phone ?? access?.display_name}.</Text>

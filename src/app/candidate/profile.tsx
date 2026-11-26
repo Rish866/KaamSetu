@@ -14,11 +14,14 @@ import { useAuth } from '../../state/AuthContext';
 import { colors } from '../../theme';
 
 type Profile = { headline: string | null; experience_months: number; current_location_id: string | null; salary_min: number | null; current_salary: number | null; salary_period: 'monthly' | 'annual';
-  notice_days: number | null; discovery_enabled: boolean; employment_status: string | null; work_modes: string[]; employment_types: string[]; photo_path: string | null };
+  notice_days: number | null; discovery_enabled: boolean; employment_status: string | null; work_modes: string[]; employment_types: string[]; photo_path: string | null;
+  relocation: string; max_office_days: number | null; commute_note: string | null };
 type Bundle = { profile: Profile; current: Place | null; preferred: Place[]; skills: string[]; locations: { location_id: string; preference_rank: number }[]; education: any[]; experience: any[]; certs: any[]; languages: any[]; resumes: any[]; extraction: any | null };
 const statuses = [['employed', 'Employed'], ['unemployed', 'Not working'], ['student', 'Student'], ['freelancing', 'Freelancing'], ['notice_period', 'Serving notice']].map(([id, label]) => ({ id, label }));
 const modes = [['onsite', 'On-site'], ['hybrid', 'Hybrid'], ['remote', 'Remote']].map(([id, label]) => ({ id, label }));
 const types = [['full_time', 'Full-time'], ['part_time', 'Part-time'], ['contract', 'Contract'], ['internship', 'Internship']].map(([id, label]) => ({ id, label }));
+const relocations = [['no', 'Not open to relocating'], ['within_state', 'Within my state'], ['preferred_places', 'Only to my preferred places'], ['anywhere_india', 'Anywhere in India']].map(([id, label]) => ({ id, label }));
+const officeDays = [['0', 'Fully remote only'], ['1', '1'], ['2', '2'], ['3', '3'], ['4', '4'], ['5', '5'], ['6', '6']].map(([id, label]) => ({ id, label }));
 const levels = ['basic', 'conversational', 'fluent', 'native'].map((id) => ({ id, label: labelize(id) }));
 const num = (v: string) => (v.trim() === '' ? null : Number(v.replace(/[^\d.]/g, '')));
 
@@ -44,12 +47,13 @@ export default function ProfileScreen() {
 
   const flags = usePlatformFlags();
   const [msg, setMsg] = useState<{ tone: 'error' | 'success'; text: string } | null>(null);
-  const [form, setForm] = useState<{ headline: string; years: string; notice: string; expected: string; current: string; period: 'monthly' | 'annual'; status: string | null; modes: string[]; types: string[]; loc: Place | null; prefs: Place[]; skills: string[] } | null>(null);
+  const [form, setForm] = useState<{ headline: string; years: string; notice: string; expected: string; current: string; period: 'monthly' | 'annual'; status: string | null; modes: string[]; types: string[]; loc: Place | null; prefs: Place[]; skills: string[]; relocation: string; officeDays: string | null; commute: string } | null>(null);
   const [dirtyKey, setDirtyKey] = useState<unknown>(null);
   if (bundle.data && dirtyKey !== bundle.data) {
     const b = bundle.data; setDirtyKey(b);
     setForm({ headline: b.profile.headline ?? '', years: b.profile.experience_months ? String(b.profile.experience_months / 12) : '', notice: b.profile.notice_days?.toString() ?? '', expected: b.profile.salary_min?.toString() ?? '', current: b.profile.current_salary?.toString() ?? '',
-      period: b.profile.salary_period, status: b.profile.employment_status, modes: b.profile.work_modes, types: b.profile.employment_types, loc: b.current, prefs: b.preferred, skills: b.skills });
+      period: b.profile.salary_period, status: b.profile.employment_status, modes: b.profile.work_modes, types: b.profile.employment_types, loc: b.current, prefs: b.preferred, skills: b.skills,
+      relocation: b.profile.relocation ?? 'no', officeDays: b.profile.max_office_days === null ? null : String(b.profile.max_office_days), commute: b.profile.commute_note ?? '' });
   }
   const refresh = async () => { await Promise.all([bundle.reload(), completion.reload()]); };
   const bad = (e: { message?: string; code?: string }) => setMsg({ tone: 'error', text: e instanceof Error && !('code' in e) ? e.message : friendlyError(e) });
@@ -61,8 +65,10 @@ export default function ProfileScreen() {
     if (form.headline.length > 150) return setMsg({ tone: 'error', text: 'Headline must be 150 characters or fewer.' });
     if (years < 0 || years > 60) return setMsg({ tone: 'error', text: 'Enter experience between 0 and 60 years.' });
     if (notice !== null && (notice < 0 || notice > 365)) return setMsg({ tone: 'error', text: 'Notice period must be between 0 and 365 days.' });
+    if (form.commute.length > 200) return setMsg({ tone: 'error', text: 'Commute note must be 200 characters or fewer.' });
     const { error } = await supabase.from('candidate_profiles').update({ headline: form.headline.trim() || null, experience_months: Math.round(years * 12), notice_days: notice, salary_min: expected, current_salary: current, salary_period: form.period,
-      employment_status: form.status, work_modes: form.modes, employment_types: form.types, current_location_id: form.loc?.id ?? null, updated_at: new Date().toISOString() }).eq('user_id', uid);
+      employment_status: form.status, work_modes: form.modes, employment_types: form.types, current_location_id: form.loc?.id ?? null,
+      relocation: form.relocation, max_office_days: form.officeDays === null ? null : Number(form.officeDays), commute_note: form.commute.trim() || null, updated_at: new Date().toISOString() }).eq('user_id', uid);
     if (error) return bad(error);
     await supabase.from('candidate_locations').delete().eq('candidate_id', uid);
     if (form.prefs.length) { const { error: e2 } = await supabase.from('candidate_locations').insert(form.prefs.slice(0, 10).map((place, i) => ({ candidate_id: uid, location_id: place.id, preference_rank: i + 1 }))); if (e2) return bad(e2); }
@@ -108,6 +114,9 @@ export default function ProfileScreen() {
             hint="Add up to 10 places anywhere in India. Choose a whole state if you are open to any city in it. Your first choice counts most." />
           {form.prefs.length === 0 && <Text style={styles.muted}>No preferred locations yet.</Text>}
           <Chips label="Work mode I accept" options={modes} selected={form.modes} onToggle={(m) => setForm({ ...form, modes: toggle(form.modes, m, 1) })} />
+          <Chips label="Open to relocating?" options={relocations} selected={[form.relocation]} onToggle={(relocation) => setForm({ ...form, relocation })} />
+          {form.modes.includes('hybrid') && <Chips label="Most office days per week I can do" options={officeDays} selected={form.officeDays === null ? [] : [form.officeDays]} onToggle={(d) => setForm({ ...form, officeDays: form.officeDays === d ? null : d })} />}
+          <Field label="Commute note (optional)" value={form.commute} onChangeText={(commute) => setForm({ ...form, commute })} maxLength={200} placeholder="e.g. Up to 1 hour by local train" hint="Office days and this note are shown only to employers you apply to. Relocation is also shown in employer search if discovery is on." />
           <Chips label="Employment types I accept" options={types} selected={form.types} onToggle={(m) => setForm({ ...form, types: toggle(form.types, m, 1) })} />
           <PrimaryButton label="Save profile" icon="save-outline" onPress={saveBasics} />
         </Card>

@@ -34,6 +34,24 @@ export type Database = {
         Update: Partial<Database['public']['Tables']['abuse_reports']['Insert']>;
         Relationships: [];
       };
+      application_answers: {
+        Row: {
+          application_id: string;
+          question_id: string;
+          answer_bool: boolean | null;
+          answer_text: string | null;
+          created_at: string;
+        };
+        Insert: {
+          application_id: string;
+          question_id: string;
+          answer_bool?: boolean | null;
+          answer_text?: string | null;
+          created_at?: string;
+        };
+        Update: Partial<Database['public']['Tables']['application_answers']['Insert']>;
+        Relationships: [];
+      };
       application_events: {
         Row: {
           id: string;
@@ -44,6 +62,7 @@ export type Database = {
           reason: string | null;
           created_at: string;
           details: string | null;
+          outcome_tag: string | null;
         };
         Insert: {
           id?: string;
@@ -54,6 +73,7 @@ export type Database = {
           reason?: string | null;
           created_at?: string;
           details?: string | null;
+          outcome_tag?: string | null;
         };
         Update: Partial<Database['public']['Tables']['application_events']['Insert']>;
         Relationships: [];
@@ -199,6 +219,9 @@ export type Database = {
           employment_types: string[];
           employment_status: string | null;
           photo_path: string | null;
+          relocation: string;
+          max_office_days: number | null;
+          commute_note: string | null;
         };
         Insert: {
           user_id: string;
@@ -216,6 +239,9 @@ export type Database = {
           employment_types?: string[];
           employment_status?: string | null;
           photo_path?: string | null;
+          relocation?: string;
+          max_office_days?: number | null;
+          commute_note?: string | null;
         };
         Update: Partial<Database['public']['Tables']['candidate_profiles']['Insert']>;
         Relationships: [];
@@ -252,6 +278,7 @@ export type Database = {
           company_size: string | null;
           registered_address: string | null;
           operating_locations: string[];
+          review_commitment_days: number | null;
         };
         Insert: {
           id?: string;
@@ -268,6 +295,7 @@ export type Database = {
           company_size?: string | null;
           registered_address?: string | null;
           operating_locations?: string[];
+          review_commitment_days?: number | null;
         };
         Update: Partial<Database['public']['Tables']['companies']['Insert']>;
         Relationships: [];
@@ -358,6 +386,26 @@ export type Database = {
         Update: Partial<Database['public']['Tables']['contact_disclosures']['Insert']>;
         Relationships: [];
       };
+      discovery_views: {
+        Row: {
+          id: string;
+          candidate_id: string;
+          company_id: string;
+          job_id: string | null;
+          viewed_by: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          candidate_id: string;
+          company_id: string;
+          job_id?: string | null;
+          viewed_by?: string | null;
+          created_at?: string;
+        };
+        Update: Partial<Database['public']['Tables']['discovery_views']['Insert']>;
+        Relationships: [];
+      };
       districts: {
         Row: {
           id: string;
@@ -446,6 +494,7 @@ export type Database = {
           resolved_by: string | null;
           resolution_reason: string | null;
           note: string | null;
+          outcome_tag: string | null;
         };
         Insert: {
           id?: string;
@@ -468,6 +517,7 @@ export type Database = {
           resolved_by?: string | null;
           resolution_reason?: string | null;
           note?: string | null;
+          outcome_tag?: string | null;
         };
         Update: Partial<Database['public']['Tables']['hiring_milestones']['Insert']>;
         Relationships: [];
@@ -564,6 +614,26 @@ export type Database = {
         Update: Partial<Database['public']['Tables']['job_invitations']['Insert']>;
         Relationships: [];
       };
+      job_questions: {
+        Row: {
+          id: string;
+          job_id: string;
+          position: number;
+          kind: string;
+          prompt: string;
+          required: boolean;
+        };
+        Insert: {
+          id?: string;
+          job_id: string;
+          position: number;
+          kind: string;
+          prompt: string;
+          required?: boolean;
+        };
+        Update: Partial<Database['public']['Tables']['job_questions']['Insert']>;
+        Relationships: [];
+      };
       job_skills: {
         Row: {
           job_id: string;
@@ -605,6 +675,7 @@ export type Database = {
           moderation_hold: string | null;
           last_confirmed_at: string | null;
           stale_reminder_at: string | null;
+          office_days: number | null;
         };
         Insert: {
           id?: string;
@@ -630,6 +701,7 @@ export type Database = {
           moderation_hold?: string | null;
           last_confirmed_at?: string | null;
           stale_reminder_at?: string | null;
+          office_days?: number | null;
         };
         Update: Partial<Database['public']['Tables']['jobs']['Insert']>;
         Relationships: [];
@@ -696,12 +768,14 @@ export type Database = {
           email_updates: boolean;
           unsubscribe_token: string;
           updated_at: string;
+          job_alerts: boolean;
         };
         Insert: {
           user_id: string;
           email_updates?: boolean;
           unsubscribe_token?: string;
           updated_at?: string;
+          job_alerts?: boolean;
         };
         Update: Partial<Database['public']['Tables']['notification_preferences']['Insert']>;
         Relationships: [];
@@ -726,6 +800,24 @@ export type Database = {
           created_at?: string;
         };
         Update: Partial<Database['public']['Tables']['notifications']['Insert']>;
+        Relationships: [];
+      };
+      outcome_reasons: {
+        Row: {
+          code: string;
+          label: string;
+          actor: string;
+          category: string;
+          contexts: string[];
+        };
+        Insert: {
+          code: string;
+          label: string;
+          actor: string;
+          category: string;
+          contexts: string[];
+        };
+        Update: Partial<Database['public']['Tables']['outcome_reasons']['Insert']>;
         Relationships: [];
       };
       privacy_requests: {
@@ -921,6 +1013,8 @@ export type Database = {
       admin_email_status: { Args: Record<string, unknown>; Returns: unknown };
       /** (p_query text) => TABLE(user_id uuid, display_name text, email text, phone text, account_kind text, status account_status, created_at timestamp with time zone, roles text[]) */
       admin_find_user: { Args: Record<string, unknown>; Returns: unknown };
+      /** (p_days integer DEFAULT 90) => jsonb */
+      admin_funnel: { Args: Record<string, unknown>; Returns: unknown };
       /** (p_user uuid, p_role text, p_reason text) => void */
       admin_grant_role: { Args: Record<string, unknown>; Returns: unknown };
       /** () => TABLE(milestone_id uuid, kind text, label text, occurred_on date, reported_role text, reported_at timestamp with time zone, note text, dispute_reason text, disputed_at timestamp with time zone, job_title text, company_name text, application_id uuid) */
@@ -969,6 +1063,8 @@ export type Database = {
       admin_set_resume_uploads: { Args: Record<string, unknown>; Returns: unknown };
       /** (p_job uuid, p_note text DEFAULT NULL::text) => uuid */
       apply_to_job: { Args: Record<string, unknown>; Returns: unknown };
+      /** (p_job uuid, p_note text DEFAULT NULL::text, p_answers jsonb DEFAULT '[]'::jsonb) => uuid */
+      apply_with_answers: { Args: Record<string, unknown>; Returns: unknown };
       /** (p_interview uuid, p_reason text DEFAULT NULL::text) => void */
       cancel_interview: { Args: Record<string, unknown>; Returns: unknown };
       /** (p_request uuid) => void */
@@ -995,7 +1091,7 @@ export type Database = {
       deactivate_member: { Args: Record<string, unknown>; Returns: unknown };
       /** (p_resume uuid) => text */
       delete_resume: { Args: Record<string, unknown>; Returns: unknown };
-      /** (p_job uuid, p_skill text DEFAULT NULL::text, p_places uuid[] DEFAULT NULL::uuid[], p_states text[] DEFAULT NULL::text[], p_min_months integer DEFAULT NULL::integer, p_max_months integer DEFAULT NULL::integer, p_max_salary integer DEFAULT NULL::integer, p_limit integer DEFAULT 25) => TABLE(candidate_id uuid, headline text, city text, locality text, state_name text, location_label text, experience_months integer, expected_salary integer, salary_period text, notice_days integer, skills text[], score numeric, match jsonb) */
+      /** (p_job uuid, p_skill text DEFAULT NULL::text, p_places uuid[] DEFAULT NULL::uuid[], p_states text[] DEFAULT NULL::text[], p_min_months integer DEFAULT NULL::integer, p_max_months integer DEFAULT NULL::integer, p_max_salary integer DEFAULT NULL::integer, p_limit integer DEFAULT 25) => TABLE(candidate_id uuid, headline text, city text, locality text, state_name text, location_label text, experience_months integer, expected_salary integer, salary_period text, notice_days integer, skills text[], score numeric, match jsonb, relocation text) */
       discover_candidates: { Args: Record<string, unknown>; Returns: unknown };
       /** (p_milestone uuid, p_reason text) => void */
       dispute_hiring_milestone: { Args: Record<string, unknown>; Returns: unknown };
@@ -1015,6 +1111,10 @@ export type Database = {
       invite_candidate: { Args: Record<string, unknown>; Returns: unknown };
       /** (p_company uuid, p_email text, p_role company_role) => uuid */
       invite_company_member: { Args: Record<string, unknown>; Returns: unknown };
+      /** (p_job uuid) => TABLE(application_id uuid, relocation text, max_office_days smallint, commute_note text, notice_days integer, location_label text) */
+      job_applicant_preferences: { Args: Record<string, unknown>; Returns: unknown };
+      /** (p_job uuid) => TABLE(application_id uuid, question_id uuid, prompt text, kind text, answer_bool boolean, answer_text text) */
+      job_application_answers: { Args: Record<string, unknown>; Returns: unknown };
       /** (p_job uuid) => jsonb */
       job_detail: { Args: Record<string, unknown>; Returns: unknown };
       /** (p_query text DEFAULT NULL::text, p_city text DEFAULT NULL::text, p_locality text DEFAULT NULL::text, p_min_salary integer DEFAULT NULL::integer, p_max_exp_months integer DEFAULT NULL::integer, p_work_mode text DEFAULT NULL::text, p_category uuid DEFAULT NULL::uuid, p_employment_type text DEFAULT NULL::text, p_sort text DEFAULT 'match'::text, p_saved_only boolean DEFAULT false, p_limit integer DEFAULT 30, p_offset integer DEFAULT 0) => TABLE(job_id uuid, title text, company_id uuid, company_name text, company_verified boolean, city text, locality text, work_mode text, employment_type text, salary_min integer, salary_max integer, salary_period text, annual_max numeric, experience_min_months integer, published_at timestamp with time zone, skills text[], saved boolean, applied boolean, score numeric, eligible boolean, match jsonb) */
@@ -1025,6 +1125,8 @@ export type Database = {
       list_job_applicants: { Args: Record<string, unknown>; Returns: unknown };
       /** () => void */
       mark_notifications_read: { Args: Record<string, unknown>; Returns: unknown };
+      /** (p_limit integer DEFAULT 200) => jsonb */
+      my_access_log: { Args: Record<string, unknown>; Returns: unknown };
       /** () => jsonb */
       my_applications: { Args: Record<string, unknown>; Returns: unknown };
       /** () => TABLE(id uuid, company_name text, role company_role, expires_at timestamp with time zone) */
@@ -1047,7 +1149,7 @@ export type Database = {
       register_resume: { Args: Record<string, unknown>; Returns: unknown };
       /** (p_resume uuid) => void */
       reject_resume_extraction: { Args: Record<string, unknown>; Returns: unknown };
-      /** (p_application uuid, p_kind text, p_on date DEFAULT NULL::date, p_note text DEFAULT NULL::text) => uuid */
+      /** (p_application uuid, p_kind text, p_on date DEFAULT NULL::date, p_note text DEFAULT NULL::text, p_outcome_tag text DEFAULT NULL::text) => uuid */
       report_hiring_milestone: { Args: Record<string, unknown>; Returns: unknown };
       /** (p_job uuid, p_category text, p_details text DEFAULT NULL::text) => uuid */
       report_job: { Args: Record<string, unknown>; Returns: unknown };
@@ -1059,7 +1161,7 @@ export type Database = {
       respond_to_interview: { Args: Record<string, unknown>; Returns: unknown };
       /** (p_invitation uuid, p_accept boolean) => void */
       respond_to_invitation: { Args: Record<string, unknown>; Returns: unknown };
-      /** (p_application uuid, p_accept boolean, p_reason text DEFAULT NULL::text) => void */
+      /** (p_application uuid, p_accept boolean, p_reason text DEFAULT NULL::text, p_outcome_tag text DEFAULT NULL::text) => void */
       respond_to_offer: { Args: Record<string, unknown>; Returns: unknown };
       /** (p_invitation uuid) => void */
       revoke_company_invitation: { Args: Record<string, unknown>; Returns: unknown };
@@ -1073,6 +1175,10 @@ export type Database = {
       search_locations: { Args: Record<string, unknown>; Returns: unknown };
       /** (p_purpose text, p_granted boolean, p_notice_version text) => void */
       set_consent: { Args: Record<string, unknown>; Returns: unknown };
+      /** (p_on boolean) => void */
+      set_job_alerts: { Args: Record<string, unknown>; Returns: unknown };
+      /** (p_job uuid, p_questions jsonb) => void */
+      set_job_questions: { Args: Record<string, unknown>; Returns: unknown };
       /** (p_job uuid, p_to job_status, p_reason text DEFAULT NULL::text) => void */
       set_job_status: { Args: Record<string, unknown>; Returns: unknown };
       /** (p_application uuid, p_date date) => void */
@@ -1081,19 +1187,21 @@ export type Database = {
       set_member_role: { Args: Record<string, unknown>; Returns: unknown };
       /** (p_email_updates boolean) => void */
       set_notification_preferences: { Args: Record<string, unknown>; Returns: unknown };
+      /** (p_company uuid, p_days integer) => void */
+      set_review_commitment: { Args: Record<string, unknown>; Returns: unknown };
       /** (p_company uuid, p_identifier_type text, p_identifier_value text, p_evidence_path text DEFAULT NULL::text) => void */
       submit_company_verification: { Args: Record<string, unknown>; Returns: unknown };
       /** (p_job uuid) => void */
       submit_job_for_review: { Args: Record<string, unknown>; Returns: unknown };
       /** (p_job uuid) => boolean */
       toggle_saved_job: { Args: Record<string, unknown>; Returns: unknown };
-      /** (p_application uuid, p_to application_stage, p_reason text DEFAULT NULL::text, p_details text DEFAULT NULL::text) => void */
+      /** (p_application uuid, p_to application_stage, p_reason text DEFAULT NULL::text, p_details text DEFAULT NULL::text, p_outcome_tag text DEFAULT NULL::text) => void */
       transition_application: { Args: Record<string, unknown>; Returns: unknown };
       /** (p_company uuid, p_fields jsonb) => void */
       update_company_profile: { Args: Record<string, unknown>; Returns: unknown };
-      /** (p_application uuid) => void */
+      /** (p_application uuid, p_outcome_tag text DEFAULT NULL::text) => void */
       withdraw_application: { Args: Record<string, unknown>; Returns: unknown };
-      /** (p_application uuid, p_reason text) => void */
+      /** (p_application uuid, p_reason text, p_outcome_tag text DEFAULT NULL::text) => void */
       withdraw_offer: { Args: Record<string, unknown>; Returns: unknown };
     };
     Enums: {

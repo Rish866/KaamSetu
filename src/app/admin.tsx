@@ -12,7 +12,7 @@ import { colors } from '../theme';
 type Dash = Record<string, number> & { roles: string[] };
 const tabDefs: { id: string; label: string; roles: string[] }[] = [
   { id: 'overview', label: 'Overview', roles: ['admin', 'moderator', 'support', 'privacy'] }, { id: 'companies', label: 'Companies', roles: ['admin', 'moderator'] },
-  { id: 'jobs', label: 'Jobs', roles: ['admin', 'moderator'] }, { id: 'reports', label: 'Reports', roles: ['admin', 'moderator', 'support'] }, { id: 'hiring', label: 'Hiring disputes', roles: ['admin', 'moderator'] }, { id: 'fees', label: 'Hiring fees', roles: ['admin'] },
+  { id: 'jobs', label: 'Jobs', roles: ['admin', 'moderator'] }, { id: 'reports', label: 'Reports', roles: ['admin', 'moderator', 'support'] }, { id: 'hiring', label: 'Hiring disputes', roles: ['admin', 'moderator'] }, { id: 'fees', label: 'Hiring fees', roles: ['admin'] }, { id: 'funnel', label: 'Pilot funnel', roles: ['admin', 'support'] },
   { id: 'users', label: 'Users', roles: ['admin', 'support', 'privacy'] }, { id: 'privacy', label: 'Privacy', roles: ['admin', 'privacy'] },
   { id: 'audit', label: 'Audit', roles: ['admin', 'privacy'] }, { id: 'system', label: 'System', roles: ['admin', 'support'] }, { id: 'access', label: 'Access & matching', roles: ['admin'] },
 ];
@@ -30,13 +30,36 @@ export default function AdminScreen() {
       <Chips options={visible.map((t) => ({ id: t.id, label: t.label }))} selected={[tab]} onToggle={setTab} />
       {msg && <Banner tone={msg.tone}>{msg.text}</Banner>}
       {tab === 'overview' && dash.data && <Overview d={dash.data} go={setTab} />}
-      {tab === 'companies' && <Companies {...props} />}{tab === 'jobs' && <Jobs {...props} />}{tab === 'reports' && <Reports {...props} />}{tab === 'hiring' && <HiringDisputes {...props} />}{tab === 'fees' && <AdminLedger tick={tick} />}
+      {tab === 'companies' && <Companies {...props} />}{tab === 'jobs' && <Jobs {...props} />}{tab === 'reports' && <Reports {...props} />}{tab === 'hiring' && <HiringDisputes {...props} />}{tab === 'fees' && <AdminLedger tick={tick} />}{tab === 'funnel' && <Funnel />}
       {tab === 'users' && <Users {...props} />}{tab === 'privacy' && <PrivacyQueue {...props} />}{tab === 'audit' && <Audit />}{tab === 'system' && <System {...props} />}{tab === 'access' && <Access {...props} />}
     </StateView>
     <ConfirmDialog visible={!!act} requireReason destructive={act?.destructive} title={act?.title ?? ''} message={act?.message} confirmLabel={act?.confirm ?? 'Confirm'} onCancel={() => setAct(null)}
       onConfirm={async (reason) => { const a = act!; const { error } = await a.run(reason); if (error) throw error; setAct(null); setMsg({ tone: 'success', text: 'Done. The action was recorded in the audit log.' }); setTick((t) => t + 1); void dash.reload(); }} />
   </AppShell>;
 }
+type FunnelData = { window_days: number; generated_at: string; stages: { stage: string; count: number }[];
+  timing: { median_hours_to_first_action: number | null; answered_within_7_days_pct: number | null }; trust: Record<string, number>;
+  outcome_reasons: { reason: string; category: string; count: number }[]; weekly: { week: string; applications: number; first_actions: number }[] };
+const stageNames: Record<string, string> = { job_published: 'Jobs published', application_submitted: 'Applications', employer_first_action: 'Employer replied', offer_issued: 'Offers made',
+  offer_accepted: 'Offers accepted', joined_day_1: 'Joined (confirmed)', retained_day_15: 'Working at day 15', retained_day_30: 'Working at day 30' };
+function Funnel() {
+  const [days, setDays] = useState('90');
+  const f = useLoad(async () => unwrap(await supabase.rpc('admin_funnel', { p_days: Number(days) })) as unknown as FunnelData, [days]);
+  return <><Chips label="Window" options={['30', '90', '365'].map((d) => ({ id: d, label: `Last ${d} days` }))} selected={[days]} onToggle={setDays} />
+    <StateView loading={f.loading} error={f.error} onRetry={f.reload}>{f.data && <>
+      <Text style={styles.muted}>Counts only. No names or contact details. QA test accounts and QA companies are excluded. Generated {timeAgo(f.data.generated_at)}.</Text>
+      <Card style={{ gap: 8 }}>{f.data.stages.map((s, i) => { const prev = i > 0 ? f.data!.stages[i - 1].count : null; const pct = prev ? Math.round((100 * s.count) / prev) : null;
+        return <View key={s.stage} style={styles.funnelRow}><Text style={[styles.body, { flex: 1 }]}>{stageNames[s.stage] ?? s.stage}</Text><Text style={styles.title}>{s.count}</Text><Text style={[styles.muted, { minWidth: 110, textAlign: 'right' }]}>{pct !== null && i > 1 ? `${pct}% of previous` : ''}</Text></View>; })}</Card>
+      <View style={styles.metrics}><Metric label="Median hours to first reply" value={f.data.timing.median_hours_to_first_action === null ? '–' : `${f.data.timing.median_hours_to_first_action}`} icon="time-outline" />
+        <Metric label="Replied within 7 days" value={f.data.timing.answered_within_7_days_pct === null ? '–' : `${f.data.timing.answered_within_7_days_pct}%`} icon="checkmark-done-outline" />
+        {Object.entries(f.data.trust).map(([k, v]) => <Metric key={k} label={labelize(k)} value={`${v}`} icon="shield-checkmark-outline" />)}</View>
+      <SectionHead title="Why applications and hires ended" />
+      <Card style={{ gap: 6 }}>{f.data.outcome_reasons.length === 0 ? <Text style={styles.muted}>No tagged outcomes yet.</Text> : f.data.outcome_reasons.map((r) => <Text key={r.reason} style={styles.body}>{r.reason} · {labelize(r.category)} · {r.count}</Text>)}</Card>
+      <SectionHead title="Weekly applications" />
+      <Card style={{ gap: 6 }}>{f.data.weekly.length === 0 ? <Text style={styles.muted}>No applications in this window.</Text> : f.data.weekly.map((w) => <Text key={w.week} style={styles.body}>Week of {new Date(`${w.week}T00:00:00`).toLocaleDateString('en-IN')} · {w.applications} applications · {w.first_actions} replied</Text>)}</Card>
+    </>}</StateView></>;
+}
+
 type P = { ask: (a: Act) => void; tick: number; setMsg: (m: { tone: 'error' | 'success'; text: string }) => void };
 
 function Overview({ d, go }: { d: Dash; go: (t: string) => void }) {
@@ -159,4 +182,4 @@ function Access({ ask, tick }: P) {
       <Row>{(Object.keys(w) as (keyof typeof w)[]).map((k) => <Field key={k} label={labelize(k)} value={w[k]} onChangeText={(t) => setW({ ...w, [k]: t.replace(/\D/g, '') })} keyboardType="number-pad" />)}</Row><Text style={[styles.muted, sum !== 100 && { color: colors.danger }]}>Total: {sum}</Text>
       <PrimaryButton label="Publish new weights" disabled={sum !== 100} onPress={() => ask({ title: 'Change matching weights', message: 'Write what evidence justifies the change (at least 10 characters).', confirm: 'Publish', run: (reason) => supabase.rpc('admin_set_matching_weights', { p_weights: Object.fromEntries(Object.entries(w).map(([k, x]) => [k, Number(x)])), p_reason: reason }) })} /></Card></>;
 }
-const styles = StyleSheet.create({ metrics: { flexDirection: 'row', gap: 12, flexWrap: 'wrap' }, title: { color: colors.ink, fontSize: 16, fontWeight: '900' }, muted: { color: colors.inkSoft, fontSize: 14, lineHeight: 20 }, body: { color: colors.ink, fontSize: 15, lineHeight: 22 }, rowCard: { flexDirection: 'row', alignItems: 'center', gap: 12, flexWrap: 'wrap' } });
+const styles = StyleSheet.create({ metrics: { flexDirection: 'row', gap: 12, flexWrap: 'wrap' }, title: { color: colors.ink, fontSize: 16, fontWeight: '900' }, muted: { color: colors.inkSoft, fontSize: 14, lineHeight: 20 }, body: { color: colors.ink, fontSize: 15, lineHeight: 22 }, rowCard: { flexDirection: 'row', alignItems: 'center', gap: 12, flexWrap: 'wrap' }, funnelRow: { flexDirection: 'row', alignItems: 'center', gap: 12, borderBottomWidth: 1, borderBottomColor: colors.line, paddingVertical: 6 } });

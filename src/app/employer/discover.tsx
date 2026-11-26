@@ -11,7 +11,7 @@ import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../state/AuthContext';
 import { colors } from '../../theme';
 
-type Cand = { candidate_id: string; headline: string | null; city: string | null; locality: string | null; location_label: string | null; experience_months: number; expected_salary: number | null; salary_period: 'monthly' | 'annual'; notice_days: number | null; skills: string[]; score: number;
+type Cand = { candidate_id: string; headline: string | null; city: string | null; locality: string | null; location_label: string | null; experience_months: number; expected_salary: number | null; salary_period: 'monthly' | 'annual'; notice_days: number | null; skills: string[]; score: number; relocation?: string;
   match: { components: Record<string, { explanation: string; weight: number }> } };
 
 export default function Discover() {
@@ -39,12 +39,12 @@ export default function Discover() {
           hint="Matches where candidates live or would like to work, including people open to a whole state." />
         <Row><Field label="Min experience (years)" value={minY} onChangeText={setMinY} keyboardType="decimal-pad" /><Field label="Max experience (years)" value={maxY} onChangeText={setMaxY} keyboardType="decimal-pad" /></Row>
         <PrimaryButton label={busy ? 'Searching…' : 'Find candidates'} icon="search" disabled={busy || !selected} onPress={search} />
-        <Text style={styles.muted}>Ranked by the same explainable score candidates see. Candidates outside the location, work mode or employment type of the job are excluded. Every search is logged.</Text></Card>
+        <Text style={styles.muted}>Ranked by the same explainable score candidates see. Candidates outside the location, work mode or employment type of the job are excluded. Every search is logged, and candidates can see when their masked profile appeared in your results.</Text></Card>
       {results && <><SectionHead title={`${results.length} candidate${results.length === 1 ? '' : 's'}`} />
         {results.length === 0 && <Card><Text style={styles.muted}>No consenting candidates match yet. Try fewer filters.</Text></Card>}
         {results.map((c) => <Card key={c.candidate_id} style={{ gap: 10 }}>
           <View style={styles.head}><View style={{ flex: 1 }}><Text style={styles.title}>{c.headline ?? 'Candidate'}</Text><Text style={styles.muted}>{c.location_label ?? ([c.locality, c.city].filter(Boolean).join(', ') || 'Location not shared')} · {formatExperience(c.experience_months)} · notice {c.notice_days ?? '–'} days{c.expected_salary ? ` · expects ${formatSalaryAmount(c.expected_salary, c.salary_period)}` : ''}</Text></View><Pill>{c.score}% match</Pill></View>
-          <Row>{c.skills.map((s) => <Pill key={s} tone="neutral">{s}</Pill>)}</Row>
+          <Row>{c.relocation === 'anywhere_india' && <Pill tone="saffron">Open to relocating anywhere in India</Pill>}{c.relocation === 'within_state' && <Pill tone="saffron">Open to relocating within their state</Pill>}{c.relocation === 'preferred_places' && <Pill tone="saffron">Open to relocating to preferred places</Pill>}{c.skills.map((s) => <Pill key={s} tone="neutral">{s}</Pill>)}</Row>
           {open === c.candidate_id && Object.entries(c.match.components).map(([k, comp]) => <Text key={k} style={styles.muted}>{k} ({comp.weight}%): {comp.explanation}</Text>)}
           <Row><PrimaryButton label={open === c.candidate_id ? 'Hide reasons' : 'Why this score'} variant="ghost" onPress={() => setOpen(open === c.candidate_id ? null : c.candidate_id)} /><PrimaryButton label="Invite to apply" icon="mail-outline" onPress={() => { setNote(''); setInviting(c); }} /></Row>
           <Text style={styles.small}>Name, email, phone and resume are hidden until the candidate applies or accepts and later agrees to share contact details.</Text></Card>)}</>}

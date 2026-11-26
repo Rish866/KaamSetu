@@ -4,6 +4,7 @@ import { StyleSheet, Text, View } from 'react-native';
 import { AppShell } from '../../components/AppShell';
 import { HiringMilestones, loadHiring } from '../../components/HiringMilestones';
 import { Banner, Chips, ConfirmDialog, Field, Row, StateView, unwrap, useLoad } from '../../components/kit';
+import { ReasonChips, TrustNotice } from '../../components/Trust';
 import { Card, Pill, PrimaryButton } from '../../components/ui';
 import { useMembership } from '../../lib/company';
 import { openWhenReady } from '../../lib/files';
@@ -15,6 +16,9 @@ import { colors } from '../../theme';
 type Applicant = { application_id: string; candidate_id: string; display_name: string; headline: string | null; experience_months: number; stage: string; applied_at: string; note: string | null; score: number | null;
   match: { components?: Record<string, { score: number | null; explanation: string; weight: number }> } | null };
 type Iv = { interview_id: string; application_id: string; proposed_at: string; mode: string; status: string; response_note: string | null };
+type Answer = { application_id: string; question_id: string; prompt: string; kind: string; answer_bool: boolean | null; answer_text: string | null };
+type Prefs = { application_id: string; relocation: string; max_office_days: number | null; commute_note: string | null; notice_days: number | null; location_label: string | null };
+const relocationText: Record<string, string> = { no: 'Not open to relocating', within_state: 'Open to relocating within their state', preferred_places: 'Open to relocating to preferred places', anywhere_india: 'Open to relocating anywhere in India' };
 const stages = ['applied', 'viewed', 'shortlisted', 'interview', 'offer', 'hired', 'rejected'];
 const next: Record<string, string[]> = { applied: ['viewed', 'shortlisted', 'rejected'], viewed: ['shortlisted', 'rejected'], shortlisted: ['interview', 'rejected'], interview: ['offer', 'rejected'] }; // offer -> hired happens when the candidate accepts
 const modes = [['phone', 'Phone'], ['video', 'Video'], ['onsite', 'On-site']].map(([id, label]) => ({ id, label }));
@@ -26,6 +30,9 @@ export default function JobApplicants() {
   const ivs = useLoad(async () => m ? ((unwrap(await supabase.rpc('company_interviews', { p_company: m.company.id })) ?? []) as unknown as Iv[]) : [], [m?.company.id]);
   const job = useLoad(async () => unwrap(await supabase.from('jobs').select('title,status').eq('id', id).single()), [id]);
   const hiring = useLoad(async () => loadHiring((apps.data ?? []).filter((a) => ['offer', 'hired', 'rejected'].includes(a.stage)).map((a) => a.application_id)), [apps.data]);
+  const answers = useLoad(async () => (unwrap(await supabase.rpc('job_application_answers', { p_job: id })) ?? []) as unknown as Answer[], [id, apps.data]);
+  const prefs = useLoad(async () => Object.fromEntries(((unwrap(await supabase.rpc('job_applicant_preferences', { p_job: id })) ?? []) as unknown as Prefs[]).map((p) => [p.application_id, p])), [id, apps.data]);
+  const [tag, setTag] = useState<string | null>(null);
   const [filter, setFilter] = useState<string | null>(null); const [q, setQ] = useState(''); const [open, setOpen] = useState<string | null>(null);
   const [msg, setMsg] = useState<{ tone: 'error' | 'success'; text: string } | null>(null);
   const [dlg, setDlg] = useState<{ kind: 'reject' | 'offer' | 'interview'; a: Applicant } | null>(null);
@@ -34,8 +41,8 @@ export default function JobApplicants() {
 
   const bad = (e: { message?: string; code?: string }) => setMsg({ tone: 'error', text: friendlyError(e) });
   async function refresh() { await Promise.all([apps.reload(), ivs.reload()]); }
-  async function move(a: Applicant, to: string, reason?: string, det?: string) {
-    const { error } = await supabase.rpc('transition_application', { p_application: a.application_id, p_to: to, p_reason: reason ?? null, p_details: det ?? null });
+  async function move(a: Applicant, to: string, reason?: string, det?: string, outcome?: string) {
+    const { error } = await supabase.rpc('transition_application', { p_application: a.application_id, p_to: to, p_reason: reason ?? null, p_details: det ?? null, p_outcome_tag: outcome ?? null });
     if (error) return bad(error); await refresh(); setMsg({ tone: 'success', text: `${a.display_name} moved to ${stageLabels[to] ?? to}.` });
   }
   async function reveal(a: Applicant) {
@@ -59,30 +66,34 @@ export default function JobApplicants() {
     {msg && <Banner tone={msg.tone}>{msg.text}</Banner>}
     <Card style={{ gap: 12 }}><Field label="Search applicants" value={q} onChangeText={setQ} placeholder="Name or headline" />
       <Chips label="Pipeline stage" options={[{ id: 'all', label: `All (${all.length})` }, ...stages.map((s) => ({ id: s, label: `${stageLabels[s]} (${count(s)})` }))]} selected={[filter ?? 'all']} onToggle={(s) => setFilter(s === 'all' ? null : s)} />
-      <Text style={styles.muted}>Applying shares the security-checked resume of the candidate with you. Email and phone stay hidden until you shortlist a candidate who has agreed to share them. Exporting applicant lists is disabled to protect candidate privacy.</Text></Card>
+      <Text style={styles.muted}>Applying shares the security-checked resume of the candidate with you until the application is closed. Email and phone stay hidden until you shortlist a candidate who has agreed to share them. Exporting applicant lists is disabled to protect candidate privacy.</Text></Card>
     <StateView loading={apps.loading || membership.loading} error={apps.error} onRetry={apps.reload} empty={shown.length === 0} emptyTitle="No applicants here" emptyText="Applicants appear as soon as candidates apply.">
       <View style={{ gap: 12 }}>{shown.map((a) => {
         const iv = (ivs.data ?? []).find((i) => i.application_id === a.application_id && i.status !== 'cancelled'); const c = contact[a.application_id];
         return <Card key={a.application_id} style={{ gap: 10 }}>
           <View style={styles.head}><View style={{ flex: 1 }}><Text style={styles.title}>{a.display_name}</Text><Text style={styles.muted}>{a.headline ?? 'No headline'} · {formatExperience(a.experience_months)} · applied {timeAgo(a.applied_at)}</Text></View><View style={{ alignItems: 'flex-end', gap: 6 }}><Pill>{a.score ?? '–'}% match</Pill><Pill tone={a.stage === 'rejected' ? 'coral' : 'neutral'}>{stageLabels[a.stage]}</Pill></View></View>
           {a.note && <Text style={styles.note}>“{a.note}”</Text>}
+          {(answers.data ?? []).filter((x) => x.application_id === a.application_id).map((x) => <Text key={x.question_id} style={styles.muted}><Text style={styles.strong}>{x.prompt}</Text> {x.kind === 'yes_no' ? (x.answer_bool ? 'Yes' : 'No') : x.answer_text}</Text>)}
+          {prefs.data?.[a.application_id] && (() => { const p = prefs.data[a.application_id]; return <Text style={styles.muted}>{[p.location_label ? `Lives in ${p.location_label}` : null, relocationText[p.relocation], p.max_office_days !== null ? `Up to ${p.max_office_days} office day${p.max_office_days === 1 ? '' : 's'} a week` : null, p.notice_days !== null ? `${p.notice_days} days notice` : null, p.commute_note].filter(Boolean).join(' · ')}</Text>; })()}
           {iv && <Banner tone={iv.status === 'confirmed' ? 'success' : iv.status === 'reschedule_requested' ? 'warn' : 'info'}>Interview {new Date(iv.proposed_at).toLocaleString('en-IN')} · {labelize(iv.mode)} · {labelize(iv.status)}{iv.response_note ? ` · Candidate: ${iv.response_note}` : ''}</Banner>}
           {open === a.application_id && a.match?.components && <View style={{ gap: 4 }}>{Object.entries(a.match.components).map(([k, comp]) => <Text key={k} style={styles.muted}>{labelize(k)} ({comp.weight}%): {comp.explanation}</Text>)}</View>}
           {canAct && <HiringMilestones applicationId={a.application_id} side="employer" stage={a.stage} status={hiring.data?.[a.application_id]} onChanged={refresh} />}
+          {c && <TrustNotice context="contact" />}
           {c && <Banner tone="success">Email: {c.email ?? '–'}{c.email && !c.email_verified ? ' (not verified)' : ''} · Phone: {c.phone ?? '–'}{c.phone && !c.phone_verified ? ' (not verified by SMS)' : ''}. This disclosure is logged and visible to the candidate.</Banner>}
           <Row><PrimaryButton label={open === a.application_id ? 'Hide match details' : 'Why this score'} variant="ghost" onPress={() => setOpen(open === a.application_id ? null : a.application_id)} />
-            {canAct && (next[a.stage] ?? []).map((to) => to === 'rejected' ? <PrimaryButton key={to} label="Reject" variant="secondary" onPress={() => setDlg({ kind: 'reject', a })} /> : to === 'interview' ? <PrimaryButton key={to} label={iv ? 'Reschedule interview' : 'Propose interview'} icon="calendar-outline" onPress={() => { setWhen(''); setDetails(''); setDlg({ kind: 'interview', a }); }} /> : to === 'offer' ? <PrimaryButton key={to} label="Make offer" icon="ribbon-outline" onPress={() => { setDetails(''); setDlg({ kind: 'offer', a }); }} /> : <PrimaryButton key={to} label={to === 'viewed' ? 'Mark viewed' : to === 'shortlisted' ? 'Shortlist' : 'Mark hired'} variant={to === 'shortlisted' || to === 'hired' ? 'primary' : 'secondary'} onPress={() => move(a, to)} />)}
+            {canAct && (next[a.stage] ?? []).map((to) => to === 'rejected' ? <PrimaryButton key={to} label="Reject" variant="secondary" onPress={() => { setTag(null); setDlg({ kind: 'reject', a }); }} /> : to === 'interview' ? <PrimaryButton key={to} label={iv ? 'Reschedule interview' : 'Propose interview'} icon="calendar-outline" onPress={() => { setWhen(''); setDetails(''); setDlg({ kind: 'interview', a }); }} /> : to === 'offer' ? <PrimaryButton key={to} label="Make offer" icon="ribbon-outline" onPress={() => { setDetails(''); setDlg({ kind: 'offer', a }); }} /> : <PrimaryButton key={to} label={to === 'viewed' ? 'Mark viewed' : to === 'shortlisted' ? 'Shortlist' : 'Mark hired'} variant={to === 'shortlisted' || to === 'hired' ? 'primary' : 'secondary'} onPress={() => move(a, to)} />)}
             {canAct && a.stage === 'interview' && <PrimaryButton label={iv ? 'Reschedule interview' : 'Propose interview'} variant="secondary" icon="calendar-outline" onPress={() => { setWhen(''); setDetails(''); setDlg({ kind: 'interview', a }); }} />}
             {canAct && a.stage === 'interview' && iv && <PrimaryButton label="Cancel interview" variant="ghost" onPress={async () => { const { error } = await supabase.rpc('cancel_interview', { p_interview: iv.interview_id }); if (error) return bad(error); await refresh(); }} />}
-            {canAct && a.stage !== 'withdrawn' && <PrimaryButton label="Open resume" variant="secondary" icon="document-text-outline" onPress={() => openResume(a)} />}
+            {canAct && !['withdrawn', 'rejected'].includes(a.stage) && <PrimaryButton label="Open resume" variant="secondary" icon="document-text-outline" onPress={() => openResume(a)} />}
             {canAct && ['shortlisted', 'interview', 'offer', 'hired'].includes(a.stage) && !c && <PrimaryButton label="View contact details" variant="secondary" icon="call-outline" onPress={() => reveal(a)} />}</Row>
         </Card>;
       })}</View>
     </StateView>
-    <ConfirmDialog visible={dlg?.kind === 'reject'} destructive requireReason minReason={3} title={`Reject ${dlg?.a.display_name}?`} message="The candidate will see this reason, so keep it respectful and specific." confirmLabel="Reject candidate" onCancel={() => setDlg(null)} onConfirm={async (reason) => { const a = dlg!.a; setDlg(null); await move(a, 'rejected', reason); }} />
+    <ConfirmDialog visible={dlg?.kind === 'reject'} destructive requireReason minReason={3} title={`Reject ${dlg?.a.display_name}?`} message="The candidate will see this reason, so keep it respectful and specific." confirmLabel="Reject candidate" onCancel={() => setDlg(null)} onConfirm={async (reason) => { if (!tag) throw { message: 'Choose the main reason.', code: '22023' }; const a = dlg!.a; setDlg(null); await move(a, 'rejected', reason, undefined, tag); }}>
+      <ReasonChips context="rejected" side="employer" value={tag} onChange={setTag} required /></ConfirmDialog>
     <ConfirmDialog visible={dlg?.kind === 'offer'} title={`Make an offer to ${dlg?.a.display_name}`} confirmLabel="Send offer" onCancel={() => setDlg(null)} onConfirm={async () => { if (details.trim().length < 5) throw { message: 'Add the offer details (role, salary, joining date).', code: '22023' }; const a = dlg!.a; setDlg(null); await move(a, 'offer', undefined, details.trim()); }}><Field label="Offer details" value={details} onChangeText={setDetails} multiline placeholder="Role, salary, joining date" /></ConfirmDialog>
     <ConfirmDialog visible={dlg?.kind === 'interview'} title={`Interview with ${dlg?.a.display_name}`} confirmLabel="Send proposal" onCancel={() => setDlg(null)} onConfirm={async () => { const iso = parseLocalDateTime(when); if (!iso) throw { message: 'Enter the time as YYYY-MM-DD HH:MM, for example 2026-12-01 15:30.', code: '22023' }; const a = dlg!.a; const { error } = await supabase.rpc('propose_interview', { p_application: a.application_id, p_at: iso, p_mode: mode, p_details: details || null }); if (error) throw error; setDlg(null); setMsg({ tone: 'success', text: 'Interview proposed. The candidate can confirm or ask for another time.' }); await refresh(); }}>
       <Field label="Date and time (your local time)" value={when} onChangeText={setWhen} placeholder="2026-12-01 15:30" /><Chips label="Mode" options={modes} selected={[mode]} onToggle={setMode} /><Field label="Meeting link or address" value={details} onChangeText={setDetails} multiline /></ConfirmDialog>
   </AppShell>;
 }
-const styles = StyleSheet.create({ head: { flexDirection: 'row', gap: 12, alignItems: 'flex-start' }, title: { color: colors.ink, fontSize: 18, fontWeight: '900' }, muted: { color: colors.inkSoft, fontSize: 14, lineHeight: 20 }, note: { color: colors.ink, fontStyle: 'italic', fontSize: 15 } });
+const styles = StyleSheet.create({ head: { flexDirection: 'row', gap: 12, alignItems: 'flex-start' }, title: { color: colors.ink, fontSize: 18, fontWeight: '900' }, muted: { color: colors.inkSoft, fontSize: 14, lineHeight: 20 }, note: { color: colors.ink, fontStyle: 'italic', fontSize: 15 }, strong: { color: colors.ink, fontWeight: '800' } });
