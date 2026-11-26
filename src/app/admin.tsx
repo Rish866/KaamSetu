@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { AppShell } from '../components/AppShell';
 import { Banner, Chips, ConfirmDialog, Field, Row, SectionHead, StateView, unwrap, useLoad } from '../components/kit';
+import { AdminLedger } from '../components/HiringLedger';
 import { Card, Metric, Pill, PrimaryButton } from '../components/ui';
 import { openWhenReady } from '../lib/files';
 import { formatSalaryRange, friendlyError, labelize, timeAgo } from '../lib/format';
@@ -11,7 +12,7 @@ import { colors } from '../theme';
 type Dash = Record<string, number> & { roles: string[] };
 const tabDefs: { id: string; label: string; roles: string[] }[] = [
   { id: 'overview', label: 'Overview', roles: ['admin', 'moderator', 'support', 'privacy'] }, { id: 'companies', label: 'Companies', roles: ['admin', 'moderator'] },
-  { id: 'jobs', label: 'Jobs', roles: ['admin', 'moderator'] }, { id: 'reports', label: 'Reports', roles: ['admin', 'moderator', 'support'] }, { id: 'hiring', label: 'Hiring disputes', roles: ['admin', 'moderator'] },
+  { id: 'jobs', label: 'Jobs', roles: ['admin', 'moderator'] }, { id: 'reports', label: 'Reports', roles: ['admin', 'moderator', 'support'] }, { id: 'hiring', label: 'Hiring disputes', roles: ['admin', 'moderator'] }, { id: 'fees', label: 'Hiring fees', roles: ['admin'] },
   { id: 'users', label: 'Users', roles: ['admin', 'support', 'privacy'] }, { id: 'privacy', label: 'Privacy', roles: ['admin', 'privacy'] },
   { id: 'audit', label: 'Audit', roles: ['admin', 'privacy'] }, { id: 'system', label: 'System', roles: ['admin', 'support'] }, { id: 'access', label: 'Access & matching', roles: ['admin'] },
 ];
@@ -29,7 +30,7 @@ export default function AdminScreen() {
       <Chips options={visible.map((t) => ({ id: t.id, label: t.label }))} selected={[tab]} onToggle={setTab} />
       {msg && <Banner tone={msg.tone}>{msg.text}</Banner>}
       {tab === 'overview' && dash.data && <Overview d={dash.data} go={setTab} />}
-      {tab === 'companies' && <Companies {...props} />}{tab === 'jobs' && <Jobs {...props} />}{tab === 'reports' && <Reports {...props} />}{tab === 'hiring' && <HiringDisputes {...props} />}
+      {tab === 'companies' && <Companies {...props} />}{tab === 'jobs' && <Jobs {...props} />}{tab === 'reports' && <Reports {...props} />}{tab === 'hiring' && <HiringDisputes {...props} />}{tab === 'fees' && <AdminLedger tick={tick} />}
       {tab === 'users' && <Users {...props} />}{tab === 'privacy' && <PrivacyQueue {...props} />}{tab === 'audit' && <Audit />}{tab === 'system' && <System {...props} />}{tab === 'access' && <Access {...props} />}
     </StateView>
     <ConfirmDialog visible={!!act} requireReason destructive={act?.destructive} title={act?.title ?? ''} message={act?.message} confirmLabel={act?.confirm ?? 'Confirm'} onCancel={() => setAct(null)}

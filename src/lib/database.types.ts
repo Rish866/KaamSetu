@@ -372,6 +372,58 @@ export type Database = {
         Update: Partial<Database['public']['Tables']['districts']['Insert']>;
         Relationships: [];
       };
+      hiring_ledger: {
+        Row: {
+          id: string;
+          company_id: string;
+          application_id: string;
+          amount_inr: number;
+          fee_milestone: string;
+          status: string;
+          created_at: string;
+          payable_at: string | null;
+          closed_at: string | null;
+          payment_reference: string | null;
+          note: string | null;
+        };
+        Insert: {
+          id?: string;
+          company_id: string;
+          application_id: string;
+          amount_inr: number;
+          fee_milestone: string;
+          status?: string;
+          created_at?: string;
+          payable_at?: string | null;
+          closed_at?: string | null;
+          payment_reference?: string | null;
+          note?: string | null;
+        };
+        Update: Partial<Database['public']['Tables']['hiring_ledger']['Insert']>;
+        Relationships: [];
+      };
+      hiring_ledger_events: {
+        Row: {
+          id: string;
+          entry_id: string;
+          from_status: string | null;
+          to_status: string;
+          actor_id: string | null;
+          reason: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          entry_id: string;
+          from_status?: string | null;
+          to_status: string;
+          actor_id?: string | null;
+          reason?: string | null;
+          created_at?: string;
+        };
+        Update: Partial<Database['public']['Tables']['hiring_ledger_events']['Insert']>;
+        Relationships: [];
+      };
       hiring_milestones: {
         Row: {
           id: string;
@@ -875,6 +927,10 @@ export type Database = {
       admin_hiring_disputes: { Args: Record<string, unknown>; Returns: unknown };
       /** (p_status job_status DEFAULT 'pending_review'::job_status) => TABLE(job_id uuid, title text, description text, company_id uuid, company_name text, company_status verification_status, salary_min integer, salary_max integer, salary_period text, work_mode text, city text, skills text[], moderation_hold text, submitted_at timestamp with time zone) */
       admin_job_queue: { Args: Record<string, unknown>; Returns: unknown };
+      /** (p_status text DEFAULT NULL::text) => SETOF jsonb */
+      admin_ledger: { Args: Record<string, unknown>; Returns: unknown };
+      /** (p_entry uuid, p_action text, p_reason text, p_reference text DEFAULT NULL::text) => void */
+      admin_ledger_action: { Args: Record<string, unknown>; Returns: unknown };
       /** () => TABLE(user_id uuid, display_name text, email text, role text, granted_at timestamp with time zone) */
       admin_list_roles: { Args: Record<string, unknown>; Returns: unknown };
       /** () => SETOF matching_versions */
@@ -905,6 +961,8 @@ export type Database = {
       admin_search_audit: { Args: Record<string, unknown>; Returns: unknown };
       /** (p_user uuid, p_status account_status, p_reason text) => void */
       admin_set_account_status: { Args: Record<string, unknown>; Returns: unknown };
+      /** (p_enabled boolean, p_amount_inr integer, p_milestone text, p_reason text) => jsonb */
+      admin_set_hire_fee: { Args: Record<string, unknown>; Returns: unknown };
       /** (p_weights jsonb, p_reason text) => integer */
       admin_set_matching_weights: { Args: Record<string, unknown>; Returns: unknown };
       /** (p_enabled boolean, p_reason text) => void */
@@ -919,6 +977,8 @@ export type Database = {
       company_interviews: { Args: Record<string, unknown>; Returns: unknown };
       /** (p_company uuid) => TABLE(job_id uuid, title text, status job_status, moderation_hold text, work_mode text, city text, salary_min integer, salary_max integer, salary_period text, applicants integer, new_applicants integer, published_at timestamp with time zone, created_at timestamp with time zone, closes_at timestamp with time zone) */
       company_jobs: { Args: Record<string, unknown>; Returns: unknown };
+      /** (p_company uuid) => SETOF jsonb */
+      company_ledger: { Args: Record<string, unknown>; Returns: unknown };
       /** (p_companies uuid[]) => SETOF jsonb */
       company_scorecards: { Args: Record<string, unknown>; Returns: unknown };
       /** (p_company uuid) => TABLE(user_id uuid, display_name text, email text, role company_role, active boolean, joined_at timestamp with time zone) */
@@ -939,6 +999,8 @@ export type Database = {
       discover_candidates: { Args: Record<string, unknown>; Returns: unknown };
       /** (p_milestone uuid, p_reason text) => void */
       dispute_hiring_milestone: { Args: Record<string, unknown>; Returns: unknown };
+      /** (p_entry uuid, p_reason text) => void */
+      dispute_ledger_entry: { Args: Record<string, unknown>; Returns: unknown };
       /** (p_job uuid) => uuid */
       duplicate_job: { Args: Record<string, unknown>; Returns: unknown };
       /** (p_company uuid) => jsonb */

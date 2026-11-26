@@ -4,6 +4,8 @@ import { StyleSheet, Text, View } from 'react-native';
 import { AppShell } from '../../components/AppShell';
 import { Banner, Chips, Field, Row, SectionHead, StateView, unwrap, useLoad } from '../../components/kit';
 import { loadScorecards, ScorecardCard } from '../../components/Scorecard';
+import { CompanyLedger } from '../../components/HiringLedger';
+import { usePlatformFlags } from '../../lib/platform';
 import { Card, Metric, Pill, PrimaryButton } from '../../components/ui';
 import { useMembership } from '../../lib/company';
 import { MAX_PHOTO_BYTES, pickFile } from '../../lib/files';
@@ -26,6 +28,7 @@ export default function EmployerHome() {
   const [idType, setIdType] = useState('gstin'); const [idValue, setIdValue] = useState(''); const [evidence, setEvidence] = useState<{ path: string; name: string } | null>(null);
   const invites = useLoad(async () => (unwrap(await supabase.rpc('my_company_invitations')) ?? []) as { id: string; company_name: string; role: string }[], [uid]);
   const dash = useLoad(async () => (m?.company.verification_status === 'approved' || m?.company.verification_status === 'suspended') ? (unwrap(await supabase.rpc('employer_dashboard', { p_company: m.company.id })) as unknown as Dash) : null, [m?.company.id, m?.company.verification_status]);
+  const flags = usePlatformFlags();
   const score = useLoad(async () => m ? (await loadScorecards([m.company.id]))[m.company.id] ?? null : null, [m?.company.id]);
   const interviews = useLoad(async () => m && m.company.verification_status === 'approved' ? ((unwrap(await supabase.rpc('company_interviews', { p_company: m.company.id })) ?? []) as { interview_id: string; job_title: string; candidate_name: string; proposed_at: string; mode: string; status: string }[]).filter((i) => new Date(i.proposed_at) > new Date()) : [], [m?.company.id, m?.company.verification_status]);
 
@@ -69,6 +72,7 @@ export default function EmployerHome() {
           <View style={styles.metrics}>{(['applied', 'viewed', 'shortlisted', 'interview', 'offer', 'hired', 'rejected'] as const).map((s) => <Card key={s} style={styles.stage}><Text style={styles.stageN}>{dash.data!.pipeline[s] ?? 0}</Text><Text style={styles.muted}>{labelize(s)}</Text></Card>)}</View>
         </>}</StateView>
         {score.data && <ScorecardCard s={score.data} own />}
+        {(m.role === 'owner' || m.role === 'recruiter') && <CompanyLedger companyId={m.company.id} isOwner={m.role === 'owner'} terms={flags?.hire_fee} />}
         <SectionHead title="Upcoming interviews" />
         <StateView loading={interviews.loading} error={interviews.error} onRetry={interviews.reload} empty={(interviews.data ?? []).length === 0} emptyTitle="No upcoming interviews" emptyText="Shortlist a candidate and propose a time from the job's applicants.">
           {(interviews.data ?? []).map((i) => <Card key={i.interview_id} style={styles.row}><View style={{ flex: 1 }}><Text style={styles.title}>{i.candidate_name} · {i.job_title}</Text><Text style={styles.muted}>{new Date(i.proposed_at).toLocaleString('en-IN')} · {labelize(i.mode)}</Text></View><Pill tone={i.status === 'confirmed' ? 'teal' : 'saffron'}>{labelize(i.status)}</Pill></Card>)}

@@ -18,11 +18,12 @@ export function useAuthMethods() {
 }
 
 /** Server-side feature flags (e.g. resume uploads stay off until a malware scanner is verified). */
+export type PlatformFlags = { resume_uploads_enabled: boolean; hire_fee?: { enabled: boolean; amount_inr: number; milestone: 'joined_day_1' | 'retained_day_15' | 'retained_day_30' } };
 export function usePlatformFlags() {
-  const [flags, setFlags] = useState<{ resume_uploads_enabled: boolean } | null>(null);
+  const [flags, setFlags] = useState<PlatformFlags | null>(null);
   useEffect(() => {
     let alive = true;
-    void Promise.resolve(supabase.rpc('platform_flags')).then(({ data }) => { if (alive) setFlags((data as { resume_uploads_enabled: boolean } | null) ?? { resume_uploads_enabled: false }); }, () => undefined);
+    void Promise.resolve(supabase.rpc('platform_flags')).then(({ data }) => { if (alive) setFlags((data as PlatformFlags | null) ?? { resume_uploads_enabled: false }); }, () => undefined);
     return () => { alive = false; };
   }, []);
   return flags;
