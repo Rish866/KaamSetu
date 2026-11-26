@@ -16,7 +16,7 @@ Production database changes are applied only after CI, a dry run and the owner's
 
 ## Accountability & privacy pass v2 (migrations 202611270001–0004)
 
-**Status: built and tested on branch `feat/accountability-privacy-v2`; not yet applied to production** (needs the owner's go-ahead).
+**Status: deployed and production tested 2026-11-26** (owner approved): migrations applied (run 45858317570, backup production-backup-20261126T162355Z, 28/28 post-apply checks), PR #30 merged, website live (Pages run 45858960270), live journey 26 passed / 0 failed (run 45859356592).
 
 | Item | What it does | Where enforced |
 |------|--------------|----------------|
