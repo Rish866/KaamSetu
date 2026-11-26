@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
+import { NOTICE_VERSION } from '../content/legal';
 import { friendlyError } from '../lib/format';
 import { supabase } from '../lib/supabase';
 import { colors } from '../theme';
@@ -24,7 +25,7 @@ const daysSince = (d: string) => Math.floor((Date.now() - Date.parse(`${d}T00:00
 const statusText = (m: Milestone, side: string) => m.status === 'confirmed'
   ? (m.confirmed_via === 'auto' ? 'Confirmed (no reply in 7 days)' : m.confirmed_via === 'admin' ? 'Confirmed by KaamSetu' : 'Confirmed')
   : m.status === 'pending' ? (m.reported_role === side ? 'Waiting for the other side' : 'Please confirm') : m.status === 'disputed' ? 'Disputed: KaamSetu will decide' : 'Not accepted by KaamSetu';
-type Dialog = { kind: 'decline' | 'withdraw' | 'date' | 'report' | 'dispute'; milestone?: string; report?: string; title: string } | null;
+type Dialog = { kind: 'accept' | 'decline' | 'withdraw' | 'date' | 'report' | 'dispute'; milestone?: string; report?: string; title: string } | null;
 
 export function HiringMilestones({ applicationId, side, stage, status, onChanged }: {
   applicationId: string; side: 'candidate' | 'employer'; stage: string; status?: HiringStatus; onChanged: () => Promise<void> | void }) {
@@ -60,7 +61,7 @@ export function HiringMilestones({ applicationId, side, stage, status, onChanged
     {msg && <Banner tone={msg.tone}>{msg.text}</Banner>}
     <Row>
       {side === 'candidate' && offerOpen && <>
-        <PrimaryButton label="Accept offer" icon="checkmark-circle-outline" onPress={() => call('respond_to_offer', { p_application: applicationId, p_accept: true }, 'Offer accepted. Congratulations!').catch((e) => setMsg({ tone: 'error', text: friendlyError(e) }))} />
+        <PrimaryButton label="Accept offer" icon="checkmark-circle-outline" onPress={() => open({ kind: 'accept', title: 'Accept this offer?' })} />
         <PrimaryButton label="Decline offer" variant="secondary" onPress={() => open({ kind: 'decline', title: 'Decline this offer?' })} /></>}
       {side === 'employer' && ['offer', 'hired'].includes(stage) && !joined && !noShow && <>
         <PrimaryButton label={status?.joining_date ? 'Change joining date' : 'Set joining date'} variant="secondary" icon="calendar-outline" onPress={() => open({ kind: 'date', title: 'Agreed joining date' })} />
@@ -73,6 +74,12 @@ export function HiringMilestones({ applicationId, side, stage, status, onChanged
     </Row>
     {stage === 'hired' && (joined || noShow) && <Text style={styles.small}>Each report is confirmed by the other side. If nobody replies within 7 days it is confirmed automatically; disagreements are decided by KaamSetu.</Text>}
 
+    <ConfirmDialog visible={dlg?.kind === 'accept'} title={dlg?.title ?? ''} confirmLabel="Agree and accept" onCancel={() => setDlg(null)}
+      message="To accept, you agree that KaamSetu records your joining and whether you are still working there at day 15 and day 30, and confirms these dates with the employer. You can withdraw this in Settings at any time; records already made stay."
+      onConfirm={async () => {
+        const c = await supabase.rpc('set_consent', { p_purpose: 'joining_verification', p_granted: true, p_notice_version: NOTICE_VERSION }); if (c.error) throw c.error;
+        await call('respond_to_offer', { p_application: applicationId, p_accept: true }, 'Offer accepted. Congratulations!');
+      }} />
     <ConfirmDialog visible={dlg?.kind === 'decline'} title={dlg?.title ?? ''} message="The employer will see your reason if you give one. The application ends." confirmLabel="Decline offer" destructive onCancel={() => setDlg(null)}
       onConfirm={() => call('respond_to_offer', { p_application: applicationId, p_accept: false, p_reason: note.trim() || null }, 'Offer declined.')}>
       <Field label="Reason (optional)" value={note} onChangeText={setNote} maxLength={500} /></ConfirmDialog>

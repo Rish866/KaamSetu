@@ -39,7 +39,7 @@ jobs:
           cache: npm
       - run: npm ci
       - name: Read-only production verification first
-        run: node scripts/verify-production.mjs --expect-schema 202611260004 --site "${{ inputs.base_url }}" ${{ inputs.assets_must_load == 'no' && '--assets-optional' || '' }}
+        run: node scripts/verify-production.mjs --expect-schema 202611260005 --site "${{ inputs.base_url }}" ${{ inputs.assets_must_load == 'no' && '--assets-optional' || '' }}
       - run: npx playwright install --with-deps chromium
 
       - name: Administrator for this run

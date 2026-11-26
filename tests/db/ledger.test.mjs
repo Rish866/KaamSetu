@@ -20,7 +20,7 @@ async function toHire(name) {
   await t('viewed'); await t('shortlisted');
   await emp(`select public.propose_interview($1,$2,'video','link')`, [app, new Date(Date.now() + 86400e3).toISOString()]);
   await t('offer', 'CTC 6 LPA');
-  await api.as(cand, (s) => s('select public.respond_to_offer($1, true)', [app]));
+  await api.as(cand, async (s) => { await s("select public.set_consent('joining_verification', true, '2026-11-26.2')"); return s('select public.respond_to_offer($1, true)', [app]); });
   return { cand, app };
 }
 /** Employer reports, candidate confirms. */

@@ -15,6 +15,7 @@ const purposes: { id: string; title: string; text: string }[] = [
   { id: 'employer_discovery', title: 'Let verified employers discover me', text: 'Employers see a masked profile: skills, experience, city and expected salary. Never your name, email, phone or resume.' },
   { id: 'contact_sharing', title: 'Share my email and phone after I am shortlisted', text: 'Only employers who shortlisted you can see them, and each disclosure is logged for you.' },
   { id: 'resume_parsing', title: 'Read my resume to suggest profile details', text: 'Suggestions are never added until you review and accept them.' },
+  { id: 'joining_verification', title: 'Confirm my joining with employers who hire me', text: 'Needed to accept an offer. KaamSetu records your joining and day-15/day-30 status and confirms them with that employer. Turning this off stops new records; earlier ones stay.' },
   { id: 'marketing', title: 'Send me tips and product news by email', text: 'Optional. Off unless you turn it on. Essential account and application emails are always sent.' },
 ];
 type Consent = { purpose: string; action: string; notice_version: string; created_at: string };

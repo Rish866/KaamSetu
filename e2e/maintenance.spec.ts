@@ -33,7 +33,7 @@ for (const [label, reply] of [['v1.3.0 database (function missing)', missingFunc
 }
 
 test('with the required schema, sign-in is reachable and the maintenance page is not forced', async ({ page }) => {
-  await page.route('**/rest/v1/rpc/schema_version', (route) => route.fulfill({ json: '202611260004' }));
+  await page.route('**/rest/v1/rpc/schema_version', (route) => route.fulfill({ json: '202611260005' }));
   await page.goto('/login?role=candidate');
   await page.waitForTimeout(1500);
   await expect(page).toHaveURL(/\/login/);

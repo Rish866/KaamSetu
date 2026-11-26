@@ -1,6 +1,6 @@
 # Legal review pack
 
-`KaamSetu-legal-review-2026-11-25.docx` (editable, for tracked changes) and `.pdf` (read-only) combine, for the lawyer:
+**Current: `KaamSetu-legal-review-2026-11-26-v2.docx` / `.pdf`** (India-wide scope, hiring records, employer reliability, fees). Version 1 (`2026-11-25`) is kept for reference. The Word file is editable for tracked changes; the PDF is read-only. They combine, for the lawyer:
 facts about how the service runs today, the open questions, the exact Privacy Notice / Terms / Support text from
 `src/content/legal.ts`, `docs/PRIVACY.md` and `docs/store/PRIVACY_DISCLOSURES.md`.
 

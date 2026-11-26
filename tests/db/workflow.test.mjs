@@ -79,7 +79,7 @@ test('application pipeline enforces valid transitions and records every event', 
   assert.match(await failure(t('rejected', 'no')) ?? '', /reason/);
   await t('offer', null, 'CTC 6.5 LPA, joining 1 Jan');
   assert.match(await failure(t('hired')) ?? '', /candidate accepts the offer/, 'employers cannot mark a hire themselves');
-  await api.as(cand, (s) => s('select public.respond_to_offer($1, true)', [appId]));
+  await api.as(cand, async (s) => { await s("select public.set_consent('joining_verification', true, '2026-11-26.2')"); return s('select public.respond_to_offer($1, true)', [appId]); });
   assert.match(await failure(t('rejected', 'changed our mind')) ?? '', /Cannot move/);
   const events = (await q(cand, 'select from_stage, to_stage from public.application_events where application_id=$1 order by created_at, id', [appId])).map((e) => `${e.from_stage ?? '-'}>${e.to_stage}`);
   assert.deepEqual(events, ['->applied', 'applied>viewed', 'viewed>shortlisted', 'shortlisted>interview', 'interview>offer', 'offer>hired']);

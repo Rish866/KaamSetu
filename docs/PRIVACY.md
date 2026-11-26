@@ -19,6 +19,7 @@ lawyer approval before public launch.
 | Contact sharing after shortlisting | Off | Settings | `contact_sharing` |
 | Resume parsing | Off | Settings | `resume_parsing` |
 | Marketing email | Off | Settings | `marketing` |
+| Joining confirmations (joined, day 15, day 30) | Asked when accepting an offer; required to accept | Accept-offer dialog, Settings | `joining_verification` |
 
 * Consent records are append-only (trigger blocks updates). Withdrawal is one tap and effective immediately (tested: search exclusion and contact-release refusal).
 * Notice version is `NOTICE_VERSION` in `src/content/legal.ts`. When the lawyer approves new text, bump the version. Existing users should be asked to re-accept **[LEGAL: whether re-consent is needed for each change]**.
@@ -39,7 +40,16 @@ lawyer approval before public launch.
 | Email delivery records | 90 days | |
 | Expired/declined/cancelled invitations | 365 days | |
 | Completed privacy request records | 1095 days | |
+| Hiring milestones (offer, joining, day 15/30) | kept; open reports closed and personal notes removed on deletion | |
+| Hiring fee ledger (company billing record) | kept | |
 | Inactive accounts | not yet automated | decide a period (for example 3 years of inactivity, with notice before erasure) |
+
+## Hiring outcomes, employer reliability and fees (added 2026-11-26)
+* Offer, joining, no-show, day-15/day-30 and leaving records are confirmed by both sides; unanswered reports confirm after 7 days; admins decide disputes with a reason.
+* Accepting an offer records the `joining_verification` consent. While it is withdrawn no new record about the candidate can be created or confirmed and nothing auto-confirms; admins can still decide earlier records.
+* Confirmed outcomes feed public employer reliability figures (no candidate names) and the employer hiring-fee ledger. Candidates are never a party to fees.
+* Export (`request_data_export`, version 2) includes hiring records and place names. Deletion closes open reports and removes notes the person wrote; confirmed outcomes stay without the person's name.
+* **[LEGAL]** legal basis (consent vs. legitimate use) for joining confirmations; publishing employer statistics; keeping anonymised outcomes after deletion; fee and invoicing terms.
 
 ## Children
 Sign-up requires confirming 18+. No age is stored or used. **[LEGAL]** confirm self-declaration is adequate for a job marketplace.
@@ -68,3 +78,6 @@ See docs/OPERATIONS.md section 5. **[LEGAL]** confirm DPDP Board and CERT-In rep
 9. **Children:** adequacy of the 18+ self-declaration.
 10. **Language:** whether notices are needed in Marathi/Hindi.
 11. **Resume virus scanning on GitHub servers:** every uploaded resume is copied for a few seconds to a GitHub-hosted server (USA/global), scanned with open-source ClamAV, then deleted there. Is this acceptable, and what must the notice say?
+12. **Joining confirmations and employer reliability:** consent wording in the accept-offer dialog, public employer statistics, retention of anonymised outcomes after account deletion.
+13. **Hiring fees:** employer fee terms, invoicing/GST, dispute process (fees are switched off until approved).
+14. **Pan-India scope:** notices now say "across India"; confirm nothing state-specific is needed.

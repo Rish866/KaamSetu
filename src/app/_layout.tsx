@@ -11,7 +11,7 @@ export default function RootLayout() {
 }
 
 // The database version this build needs. If production has not been migrated yet, show maintenance instead of errors.
-const REQUIRED_SCHEMA = '202611260004';
+const REQUIRED_SCHEMA = '202611260005';
 type SchemaState = 'unknown' | 'ok' | 'outdated';
 
 /** Never blocks rendering: the app renders normally and only switches to maintenance on a confirmed outdated schema. */
