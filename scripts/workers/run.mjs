@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Trusted background workers for KaamSetu (replace the earlier Edge Function workers).
 // Run by .github/workflows/workers.yml (production) and by CI against a local Supabase stack.
-//   node --experimental-strip-types scripts/workers/run.mjs --task all|resumes|privacy|email
+//   node --experimental-strip-types scripts/workers/run.mjs --task all|resumes|privacy|email|hiring
 // Env: SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY (never printed), optional CLAMSCAN_CMD, EMAIL_PROVIDER/EMAIL_API_KEY/EMAIL_FROM,
 //      SITE_URL. Logs contain only counts, task names and random IDs, never names, emails, phones or file contents.
 import { spawnSync } from 'node:child_process';
@@ -129,7 +129,10 @@ async function email() {
   }
 }
 
-const tasks = { resumes, privacy, email };
+// Joining/retention reports the other side did not answer within 7 days become confirmed.
+async function hiring() { bump('milestones_auto_confirmed', (await must(db.rpc('hiring_milestones_auto_confirm'))) ?? 0); }
+
+const tasks = { resumes, privacy, email, hiring };
 for (const [name, fn] of Object.entries(tasks)) {
   if (task !== 'all' && task !== name) continue;
   try { await fn(); } catch (e) { console.error(JSON.stringify({ task: name, error: String(e.message ?? e).slice(0, 200) })); bump(`${name}_failed`); }

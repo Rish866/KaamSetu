@@ -2,6 +2,7 @@ import { useLocalSearchParams } from 'expo-router';
 import React, { useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { AppShell } from '../../components/AppShell';
+import { HiringMilestones, loadHiring } from '../../components/HiringMilestones';
 import { Banner, Chips, ConfirmDialog, Field, Row, StateView, unwrap, useLoad } from '../../components/kit';
 import { Card, Pill, PrimaryButton } from '../../components/ui';
 import { useMembership } from '../../lib/company';
@@ -15,7 +16,7 @@ type Applicant = { application_id: string; candidate_id: string; display_name: s
   match: { components?: Record<string, { score: number | null; explanation: string; weight: number }> } | null };
 type Iv = { interview_id: string; application_id: string; proposed_at: string; mode: string; status: string; response_note: string | null };
 const stages = ['applied', 'viewed', 'shortlisted', 'interview', 'offer', 'hired', 'rejected'];
-const next: Record<string, string[]> = { applied: ['viewed', 'shortlisted', 'rejected'], viewed: ['shortlisted', 'rejected'], shortlisted: ['interview', 'rejected'], interview: ['offer', 'rejected'], offer: ['hired', 'rejected'] };
+const next: Record<string, string[]> = { applied: ['viewed', 'shortlisted', 'rejected'], viewed: ['shortlisted', 'rejected'], shortlisted: ['interview', 'rejected'], interview: ['offer', 'rejected'] }; // offer -> hired happens when the candidate accepts
 const modes = [['phone', 'Phone'], ['video', 'Video'], ['onsite', 'On-site']].map(([id, label]) => ({ id, label }));
 
 export default function JobApplicants() {
@@ -24,6 +25,7 @@ export default function JobApplicants() {
   const apps = useLoad(async () => (unwrap(await supabase.rpc('list_job_applicants', { p_job: id })) ?? []) as unknown as Applicant[], [id]);
   const ivs = useLoad(async () => m ? ((unwrap(await supabase.rpc('company_interviews', { p_company: m.company.id })) ?? []) as unknown as Iv[]) : [], [m?.company.id]);
   const job = useLoad(async () => unwrap(await supabase.from('jobs').select('title,status').eq('id', id).single()), [id]);
+  const hiring = useLoad(async () => loadHiring((apps.data ?? []).filter((a) => ['offer', 'hired', 'rejected'].includes(a.stage)).map((a) => a.application_id)), [apps.data]);
   const [filter, setFilter] = useState<string | null>(null); const [q, setQ] = useState(''); const [open, setOpen] = useState<string | null>(null);
   const [msg, setMsg] = useState<{ tone: 'error' | 'success'; text: string } | null>(null);
   const [dlg, setDlg] = useState<{ kind: 'reject' | 'offer' | 'interview'; a: Applicant } | null>(null);
@@ -66,6 +68,7 @@ export default function JobApplicants() {
           {a.note && <Text style={styles.note}>“{a.note}”</Text>}
           {iv && <Banner tone={iv.status === 'confirmed' ? 'success' : iv.status === 'reschedule_requested' ? 'warn' : 'info'}>Interview {new Date(iv.proposed_at).toLocaleString('en-IN')} · {labelize(iv.mode)} · {labelize(iv.status)}{iv.response_note ? ` · Candidate: ${iv.response_note}` : ''}</Banner>}
           {open === a.application_id && a.match?.components && <View style={{ gap: 4 }}>{Object.entries(a.match.components).map(([k, comp]) => <Text key={k} style={styles.muted}>{labelize(k)} ({comp.weight}%): {comp.explanation}</Text>)}</View>}
+          {canAct && <HiringMilestones applicationId={a.application_id} side="employer" stage={a.stage} status={hiring.data?.[a.application_id]} onChanged={refresh} />}
           {c && <Banner tone="success">Email: {c.email ?? '–'}{c.email && !c.email_verified ? ' (not verified)' : ''} · Phone: {c.phone ?? '–'}{c.phone && !c.phone_verified ? ' (not verified by SMS)' : ''}. This disclosure is logged and visible to the candidate.</Banner>}
           <Row><PrimaryButton label={open === a.application_id ? 'Hide match details' : 'Why this score'} variant="ghost" onPress={() => setOpen(open === a.application_id ? null : a.application_id)} />
             {canAct && (next[a.stage] ?? []).map((to) => to === 'rejected' ? <PrimaryButton key={to} label="Reject" variant="secondary" onPress={() => setDlg({ kind: 'reject', a })} /> : to === 'interview' ? <PrimaryButton key={to} label={iv ? 'Reschedule interview' : 'Propose interview'} icon="calendar-outline" onPress={() => { setWhen(''); setDetails(''); setDlg({ kind: 'interview', a }); }} /> : to === 'offer' ? <PrimaryButton key={to} label="Make offer" icon="ribbon-outline" onPress={() => { setDetails(''); setDlg({ kind: 'offer', a }); }} /> : <PrimaryButton key={to} label={to === 'viewed' ? 'Mark viewed' : to === 'shortlisted' ? 'Shortlist' : 'Mark hired'} variant={to === 'shortlisted' || to === 'hired' ? 'primary' : 'secondary'} onPress={() => move(a, to)} />)}

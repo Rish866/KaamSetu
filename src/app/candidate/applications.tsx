@@ -2,6 +2,7 @@ import { router } from 'expo-router';
 import React, { useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { AppShell } from '../../components/AppShell';
+import { HiringMilestones, loadHiring } from '../../components/HiringMilestones';
 import { Banner, ConfirmDialog, Field, Row, SectionHead, StateView, unwrap, useLoad } from '../../components/kit';
 import { Card, Pill, PrimaryButton } from '../../components/ui';
 import { formatSalaryRange, friendlyError, labelize, stageLabels, timeAgo } from '../../lib/format';
@@ -17,6 +18,7 @@ const tone = (s: string) => (s === 'rejected' || s === 'withdrawn' ? 'coral' : s
 export default function Applications() {
   const apps = useLoad(async () => (unwrap(await supabase.rpc('my_applications')) ?? []) as unknown as App[], []);
   const invites = useLoad(async () => ((unwrap(await supabase.rpc('my_invitations')) ?? []) as unknown as Invite[]), []);
+  const hiring = useLoad(async () => loadHiring((apps.data ?? []).filter((a) => ['offer', 'hired', 'rejected', 'withdrawn'].includes(a.stage)).map((a) => a.id)), [apps.data]);
   const [msg, setMsg] = useState<{ tone: 'error' | 'success'; text: string } | null>(null);
   const [withdraw, setWithdraw] = useState<App | null>(null);
   const [resched, setResched] = useState<App | null>(null);
@@ -45,7 +47,8 @@ export default function Applications() {
           <Row>{a.interview.status === 'proposed' && <PrimaryButton label="Confirm" icon="checkmark" onPress={() => run(() => supabase.rpc('respond_to_interview', { p_interview: a.interview!.id, p_action: 'confirm' }), 'Interview confirmed.')} />}
             {a.interview.status !== 'reschedule_requested' && <PrimaryButton label="Request another time" variant="secondary" onPress={() => { setNote(''); setResched(a); }} />}
             <PrimaryButton label="Decline" variant="ghost" onPress={() => run(() => supabase.rpc('respond_to_interview', { p_interview: a.interview!.id, p_action: 'decline' }), 'Interview declined.')} /></Row></Card>}
-        <Row><PrimaryButton label="View job" variant="ghost" onPress={() => router.push({ pathname: '/candidate/job', params: { id: a.job_id } })} />{!['hired', 'rejected', 'withdrawn'].includes(a.stage) && <PrimaryButton label="Withdraw application" variant="secondary" icon="close-circle-outline" onPress={() => setWithdraw(a)} />}</Row>
+        <HiringMilestones applicationId={a.id} side="candidate" stage={a.stage} status={hiring.data?.[a.id]} onChanged={async () => { await apps.reload(); }} />
+        <Row><PrimaryButton label="View job" variant="ghost" onPress={() => router.push({ pathname: '/candidate/job', params: { id: a.job_id } })} />{!['offer', 'hired', 'rejected', 'withdrawn'].includes(a.stage) && <PrimaryButton label="Withdraw application" variant="secondary" icon="close-circle-outline" onPress={() => setWithdraw(a)} />}</Row>
       </Card>)}</View>
     </StateView>
     <ConfirmDialog visible={!!withdraw} destructive title="Withdraw this application?" message="The employer will no longer see it, and you cannot apply to this job again." confirmLabel="Withdraw" onCancel={() => setWithdraw(null)} onConfirm={async () => { const a = withdraw!; setWithdraw(null); await run(() => supabase.rpc('withdraw_application', { p_application: a.id }), 'Application withdrawn.'); }} />

@@ -11,7 +11,7 @@ import { colors } from '../theme';
 type Dash = Record<string, number> & { roles: string[] };
 const tabDefs: { id: string; label: string; roles: string[] }[] = [
   { id: 'overview', label: 'Overview', roles: ['admin', 'moderator', 'support', 'privacy'] }, { id: 'companies', label: 'Companies', roles: ['admin', 'moderator'] },
-  { id: 'jobs', label: 'Jobs', roles: ['admin', 'moderator'] }, { id: 'reports', label: 'Reports', roles: ['admin', 'moderator', 'support'] },
+  { id: 'jobs', label: 'Jobs', roles: ['admin', 'moderator'] }, { id: 'reports', label: 'Reports', roles: ['admin', 'moderator', 'support'] }, { id: 'hiring', label: 'Hiring disputes', roles: ['admin', 'moderator'] },
   { id: 'users', label: 'Users', roles: ['admin', 'support', 'privacy'] }, { id: 'privacy', label: 'Privacy', roles: ['admin', 'privacy'] },
   { id: 'audit', label: 'Audit', roles: ['admin', 'privacy'] }, { id: 'system', label: 'System', roles: ['admin', 'support'] }, { id: 'access', label: 'Access & matching', roles: ['admin'] },
 ];
@@ -29,7 +29,7 @@ export default function AdminScreen() {
       <Chips options={visible.map((t) => ({ id: t.id, label: t.label }))} selected={[tab]} onToggle={setTab} />
       {msg && <Banner tone={msg.tone}>{msg.text}</Banner>}
       {tab === 'overview' && dash.data && <Overview d={dash.data} go={setTab} />}
-      {tab === 'companies' && <Companies {...props} />}{tab === 'jobs' && <Jobs {...props} />}{tab === 'reports' && <Reports {...props} />}
+      {tab === 'companies' && <Companies {...props} />}{tab === 'jobs' && <Jobs {...props} />}{tab === 'reports' && <Reports {...props} />}{tab === 'hiring' && <HiringDisputes {...props} />}
       {tab === 'users' && <Users {...props} />}{tab === 'privacy' && <PrivacyQueue {...props} />}{tab === 'audit' && <Audit />}{tab === 'system' && <System {...props} />}{tab === 'access' && <Access {...props} />}
     </StateView>
     <ConfirmDialog visible={!!act} requireReason destructive={act?.destructive} title={act?.title ?? ''} message={act?.message} confirmLabel={act?.confirm ?? 'Confirm'} onCancel={() => setAct(null)}
@@ -79,6 +79,18 @@ function Reports({ ask, tick }: P) {
     <StateView loading={q.loading} error={q.error} onRetry={q.reload} empty={(q.data ?? []).length === 0} emptyTitle="No reports">{(q.data ?? []).map((r) => <Card key={r.report_id} style={{ gap: 8 }}>
       <Text style={styles.title}>{labelize(r.category)} · {r.job_title ?? 'job removed'} <Text style={styles.muted}>({r.company_name ?? 'company n/a'})</Text></Text><Text style={styles.body}>{r.details ?? 'No details provided.'}</Text><Text style={styles.muted}>Reported {timeAgo(r.created_at)}{r.resolution ? ` · ${r.resolution}` : ''}</Text>
       {(status === 'open' || status === 'reviewing') && <Row>{status === 'open' && <PrimaryButton label="Start review" variant="secondary" onPress={() => resolve(r, 'reviewing', 'Start reviewing this report')} />}<PrimaryButton label="Action taken" onPress={() => resolve(r, 'actioned', 'Mark as actioned')} /><PrimaryButton label="Dismiss" variant="ghost" onPress={() => resolve(r, 'dismissed', 'Dismiss report')} /></Row>}</Card>)}</StateView></>;
+}
+
+function HiringDisputes({ ask, tick }: P) {
+  const q = useLoad(async () => (unwrap(await supabase.rpc('admin_hiring_disputes')) ?? []) as any[], [tick]);
+  const decide = (r: any, decision: 'confirm' | 'reject', title: string) => ask({ title, confirm: 'Save decision', message: 'Both sides are notified and see your reason.',
+    run: (reason) => supabase.rpc('admin_resolve_hiring_milestone', { p_milestone: r.milestone_id, p_decision: decision, p_reason: reason }) });
+  return <StateView loading={q.loading} error={q.error} onRetry={q.reload} empty={(q.data ?? []).length === 0} emptyTitle="No disputed milestones">{(q.data ?? []).map((r) => <Card key={r.milestone_id} style={{ gap: 8 }}>
+    <Text style={styles.title}>{r.label} · {r.job_title} <Text style={styles.muted}>({r.company_name})</Text></Text>
+    <Text style={styles.body}>Reported by the {r.reported_role} for {new Date(`${r.occurred_on}T00:00:00`).toLocaleDateString('en-IN')}{r.note ? `: ${r.note}` : ''}</Text>
+    <Text style={styles.body}>Dispute: {r.dispute_reason}</Text><Text style={styles.muted}>Disputed {timeAgo(r.disputed_at)}</Text>
+    <Row><PrimaryButton label="It happened" onPress={() => decide(r, 'confirm', `Confirm: ${r.label}`)} /><PrimaryButton label="It did not happen" variant="secondary" onPress={() => decide(r, 'reject', `Reject: ${r.label}`)} /></Row>
+  </Card>)}</StateView>;
 }
 
 function Users({ ask, tick }: P) {

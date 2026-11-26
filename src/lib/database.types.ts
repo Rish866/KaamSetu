@@ -69,6 +69,7 @@ export type Database = {
           updated_at: string;
           note: string | null;
           match_snapshot: Json | null;
+          joining_date: string | null;
         };
         Insert: {
           id?: string;
@@ -80,6 +81,7 @@ export type Database = {
           updated_at?: string;
           note?: string | null;
           match_snapshot?: Json | null;
+          joining_date?: string | null;
         };
         Update: Partial<Database['public']['Tables']['applications']['Insert']>;
         Relationships: [];
@@ -368,6 +370,54 @@ export type Database = {
           name: string;
         };
         Update: Partial<Database['public']['Tables']['districts']['Insert']>;
+        Relationships: [];
+      };
+      hiring_milestones: {
+        Row: {
+          id: string;
+          application_id: string;
+          company_id: string;
+          candidate_id: string;
+          kind: string;
+          occurred_on: string;
+          status: string;
+          reported_by: string;
+          reported_role: string;
+          reported_at: string;
+          confirmed_at: string | null;
+          confirmed_by: string | null;
+          confirmed_via: string | null;
+          disputed_at: string | null;
+          disputed_by: string | null;
+          dispute_reason: string | null;
+          resolved_at: string | null;
+          resolved_by: string | null;
+          resolution_reason: string | null;
+          note: string | null;
+        };
+        Insert: {
+          id?: string;
+          application_id: string;
+          company_id: string;
+          candidate_id: string;
+          kind: string;
+          occurred_on?: string;
+          status: string;
+          reported_by: string;
+          reported_role: string;
+          reported_at?: string;
+          confirmed_at?: string | null;
+          confirmed_by?: string | null;
+          confirmed_via?: string | null;
+          disputed_at?: string | null;
+          disputed_by?: string | null;
+          dispute_reason?: string | null;
+          resolved_at?: string | null;
+          resolved_by?: string | null;
+          resolution_reason?: string | null;
+          note?: string | null;
+        };
+        Update: Partial<Database['public']['Tables']['hiring_milestones']['Insert']>;
         Relationships: [];
       };
       interviews: {
@@ -817,6 +867,8 @@ export type Database = {
       admin_find_user: { Args: Record<string, unknown>; Returns: unknown };
       /** (p_user uuid, p_role text, p_reason text) => void */
       admin_grant_role: { Args: Record<string, unknown>; Returns: unknown };
+      /** () => TABLE(milestone_id uuid, kind text, label text, occurred_on date, reported_role text, reported_at timestamp with time zone, note text, dispute_reason text, disputed_at timestamp with time zone, job_title text, company_name text, application_id uuid) */
+      admin_hiring_disputes: { Args: Record<string, unknown>; Returns: unknown };
       /** (p_status job_status DEFAULT 'pending_review'::job_status) => TABLE(job_id uuid, title text, description text, company_id uuid, company_name text, company_status verification_status, salary_min integer, salary_max integer, salary_period text, work_mode text, city text, skills text[], moderation_hold text, submitted_at timestamp with time zone) */
       admin_job_queue: { Args: Record<string, unknown>; Returns: unknown };
       /** () => TABLE(user_id uuid, display_name text, email text, role text, granted_at timestamp with time zone) */
@@ -831,6 +883,8 @@ export type Database = {
       admin_reject_privacy_request: { Args: Record<string, unknown>; Returns: unknown };
       /** (p_status text DEFAULT 'open'::text) => TABLE(report_id uuid, category text, details text, status text, job_id uuid, job_title text, company_id uuid, company_name text, created_at timestamp with time zone, resolution text) */
       admin_reports: { Args: Record<string, unknown>; Returns: unknown };
+      /** (p_milestone uuid, p_decision text, p_reason text) => void */
+      admin_resolve_hiring_milestone: { Args: Record<string, unknown>; Returns: unknown };
       /** (p_report uuid, p_status text, p_reason text) => void */
       admin_resolve_report: { Args: Record<string, unknown>; Returns: unknown };
       /** () => TABLE(resume_id uuid, scan_status text, scan_detail text, scan_attempts integer, created_at timestamp with time zone) */
@@ -863,6 +917,8 @@ export type Database = {
       company_jobs: { Args: Record<string, unknown>; Returns: unknown };
       /** (p_company uuid) => TABLE(user_id uuid, display_name text, email text, role company_role, active boolean, joined_at timestamp with time zone) */
       company_team: { Args: Record<string, unknown>; Returns: unknown };
+      /** (p_milestone uuid) => void */
+      confirm_hiring_milestone: { Args: Record<string, unknown>; Returns: unknown };
       /** (legal_name text, display_name text, city text DEFAULT NULL::text, website text DEFAULT NULL::text) => uuid */
       create_employer_company: { Args: Record<string, unknown>; Returns: unknown };
       /** () => TABLE(account_kind text, display_name text, is_admin boolean, status account_status) */
@@ -873,6 +929,8 @@ export type Database = {
       delete_resume: { Args: Record<string, unknown>; Returns: unknown };
       /** (p_job uuid, p_skill text DEFAULT NULL::text, p_places uuid[] DEFAULT NULL::uuid[], p_states text[] DEFAULT NULL::text[], p_min_months integer DEFAULT NULL::integer, p_max_months integer DEFAULT NULL::integer, p_max_salary integer DEFAULT NULL::integer, p_limit integer DEFAULT 25) => TABLE(candidate_id uuid, headline text, city text, locality text, state_name text, location_label text, experience_months integer, expected_salary integer, salary_period text, notice_days integer, skills text[], score numeric, match jsonb) */
       discover_candidates: { Args: Record<string, unknown>; Returns: unknown };
+      /** (p_milestone uuid, p_reason text) => void */
+      dispute_hiring_milestone: { Args: Record<string, unknown>; Returns: unknown };
       /** (p_job uuid) => uuid */
       duplicate_job: { Args: Record<string, unknown>; Returns: unknown };
       /** (p_company uuid) => jsonb */
@@ -917,6 +975,8 @@ export type Database = {
       register_resume: { Args: Record<string, unknown>; Returns: unknown };
       /** (p_resume uuid) => void */
       reject_resume_extraction: { Args: Record<string, unknown>; Returns: unknown };
+      /** (p_application uuid, p_kind text, p_on date DEFAULT NULL::date, p_note text DEFAULT NULL::text) => uuid */
+      report_hiring_milestone: { Args: Record<string, unknown>; Returns: unknown };
       /** (p_job uuid, p_category text, p_details text DEFAULT NULL::text) => uuid */
       report_job: { Args: Record<string, unknown>; Returns: unknown };
       /** () => uuid */
@@ -927,6 +987,8 @@ export type Database = {
       respond_to_interview: { Args: Record<string, unknown>; Returns: unknown };
       /** (p_invitation uuid, p_accept boolean) => void */
       respond_to_invitation: { Args: Record<string, unknown>; Returns: unknown };
+      /** (p_application uuid, p_accept boolean, p_reason text DEFAULT NULL::text) => void */
+      respond_to_offer: { Args: Record<string, unknown>; Returns: unknown };
       /** (p_invitation uuid) => void */
       revoke_company_invitation: { Args: Record<string, unknown>; Returns: unknown };
       /** () => event_trigger */
@@ -941,6 +1003,8 @@ export type Database = {
       set_consent: { Args: Record<string, unknown>; Returns: unknown };
       /** (p_job uuid, p_to job_status, p_reason text DEFAULT NULL::text) => void */
       set_job_status: { Args: Record<string, unknown>; Returns: unknown };
+      /** (p_application uuid, p_date date) => void */
+      set_joining_date: { Args: Record<string, unknown>; Returns: unknown };
       /** (p_company uuid, p_user uuid, p_role company_role) => void */
       set_member_role: { Args: Record<string, unknown>; Returns: unknown };
       /** (p_email_updates boolean) => void */
@@ -957,6 +1021,8 @@ export type Database = {
       update_company_profile: { Args: Record<string, unknown>; Returns: unknown };
       /** (p_application uuid) => void */
       withdraw_application: { Args: Record<string, unknown>; Returns: unknown };
+      /** (p_application uuid, p_reason text) => void */
+      withdraw_offer: { Args: Record<string, unknown>; Returns: unknown };
     };
     Enums: {
       account_status: 'active' | 'suspended' | 'deleted';
