@@ -99,6 +99,10 @@ test('10b. employer confirms the job is still open', async () => {
   await inCard(e, jobTitle, 'Still hiring');
   await expect(e.getByText('Thanks. The job stays open for another 30 days.')).toBeVisible();
   await expect(card(e, jobTitle, 'Still hiring').getByText(/Confirmed still open today/)).toBeVisible();
+  // Hire fees are off in production: the dashboard says hiring is free and shows no fee entries.
+  await e.goto(`${env.base}/employer`);
+  await expect(e.getByText(/Hiring on KaamSetu is free right now/)).toBeVisible({ timeout: 20_000 });
+  await expect(e.getByText('No hiring fees')).toBeVisible();
 });
 
 test('11-12. candidate searches, sees an explainable match and applies', async () => {

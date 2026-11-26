@@ -9,7 +9,7 @@ Production database changes are applied only after CI, a dry run and the owner's
 | 1. Pan-India locations | 36 states/UTs, 737 districts, 19,300 PIN codes; type-ahead; job search by places, whole states, PIN prefix, remote; discovery by place; hierarchical location score; India-wide copy | **Deployed and production tested 2026-11-26**: migration applied (run 45774730159, backup production-backup-20261126T072158Z), website build 9e79b0f live, live journey 24/24 (run 45775467310) |
 | 2. Offer and joining milestones | offer issued/accepted/declined/withdrawn, joined day 1, no-show, retained day 15/30, left before day 30; both sides confirm, 7-day auto-confirm, disputes decided by admins with a reason | **Deployed and production tested 2026-11-26**: migration applied (run 45788629867, backup production-backup-20261126T090458Z), live journey 25/25 incl. accept → joined → confirmed (run 45789465170) |
 | 3. Employer accountability scorecard | median response time, 7-day response rate, offers honoured, hires who joined, day-30 retention; "new employer" below the thresholds; 25-day reminder and 30-day auto-pause | **Deployed and production tested 2026-11-26**: migration applied (run 45813319419, backup production-backup-20261126T114502Z), live journey 26/26 (run 45814166234) |
-| 4. Outcome-based hiring ledger | pending_milestone → payable → paid / waived / disputed, audited; candidates never charged; no payment gateway yet | Planned |
+| 4. Outcome-based hiring ledger | pending_milestone → payable → paid / waived / disputed / void, audited; candidates never charged; fees off and ₹0 until an admin sets them; no payment gateway yet | **Written, tested locally** (PR) |
 | 5. DPDP | "joining verification" consent purpose; export and deletion cover new tables; updated notice and legal pack | Planned |
 
 ## Part 1 decisions
@@ -36,3 +36,13 @@ Production database changes are applied only after CI, a dry run and the owner's
 * Scorecards are visible to signed-in users for verified companies, and always to the company itself (dashboard).
 * Published jobs must be confirmed every 30 days ("Still hiring"); reminder at 25 days, automatic pause at 30 by the worker,
   recorded as a system event. Publishing or resuming counts as confirmation.
+
+## Part 4 decisions
+* Fee terms (on/off, ₹ per hire, milestone: day 1 / day 15 / day 30) are platform settings set by an admin with a reason;
+  default OFF, ₹0, day 15. The terms in force when the candidate accepts an offer are copied onto that hire's entry.
+* An entry becomes payable automatically when its milestone is confirmed by both sides (or decided by an admin); it is void
+  when the candidate does not join, the offer is withdrawn, or the candidate leaves before the fee milestone.
+* Company owners can dispute a payable fee; admins keep it ("fee stands"), waive it, or record a payment with a bank/UPI
+  reference. History is immutable. Candidates are never a party to the ledger.
+* Not built: payment collection (gateway), GST invoices, tax handling. These need the company's GST registration, a payment
+  gateway account and an accountant's review before fees are switched on.

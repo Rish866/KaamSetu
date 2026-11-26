@@ -254,7 +254,7 @@ test('resume uploads are OFF by default; only an admin can switch them on, with 
   const fresh = await createDb({ resumeUploads: false });
   const adm = await fresh.signUp('candidate', 'Gate Admin'); await fresh.grantAdmin(adm);
   const c = await fresh.signUp('candidate', 'Gate Candidate');
-  assert.deepEqual((await fresh.as(c, (s) => s('select public.platform_flags() f'))).rows[0].f, { resume_uploads_enabled: false });
+  assert.equal((await fresh.as(c, (s) => s('select public.platform_flags() f'))).rows[0].f.resume_uploads_enabled, false);
   assert.ok(await failure(fresh.as(c, (s) => s(`insert into storage.objects (bucket_id,name,owner_id) values ('resumes',$1,$2)`, [`${c.id}/a.pdf`, c.id]))), 'storage upload refused while off');
   await fresh.q(`insert into storage.objects (bucket_id,name,owner_id,metadata) values ('resumes',$1,$2,'{"size":"10"}')`, [`${c.id}/a.pdf`, c.id]);
   assert.match(await failure(fresh.as(c, (s) => s(`select public.register_resume($1,'a.pdf','application/pdf',10,$2)`, [`${c.id}/a.pdf`, 'a'.repeat(64)]))) ?? '', /temporarily unavailable/);
