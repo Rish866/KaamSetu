@@ -3,7 +3,7 @@
 do $$
 declare problems text[] := '{}';
 begin
-  if public.schema_version() <> '202611260005' then problems := array_append(problems, 'schema_version'); end if;
+  if public.schema_version() <> '202611270004' then problems := array_append(problems, 'schema_version'); end if;
   if (select count(*) from public.profiles) <> 2 then problems := array_append(problems, 'profiles lost'); end if;
   if (select count(*) from public.jobs where title = 'Legacy job' and status = 'pending_review') <> 1 then problems := array_append(problems, 'legacy job changed'); end if;
   if (select verification_status from public.companies where display_name = 'Legacy') <> 'draft' then problems := array_append(problems, 'legacy company not returned to draft'); end if;

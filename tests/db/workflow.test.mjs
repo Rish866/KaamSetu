@@ -94,7 +94,7 @@ test('application pipeline enforces valid transitions and records every event', 
 test('rejection requires a reason, closes interviews, and withdrawn applications are terminal', async () => {
   const c2 = await makeCandidate(api, 'Reject Me'); const c3 = await makeCandidate(api, 'Withdrawer');
   const a2 = await api.as(c2, async (s) => (await s('select public.apply_to_job($1) id', [job])).rows[0].id);
-  await api.as(co.owner, (s) => s(`select public.transition_application($1,'rejected','Role requires a degree')`, [a2]));
+  await api.as(co.owner, (s) => s(`select public.transition_application($1,'rejected','Role requires a degree',null,'skills_or_experience_gap')`, [a2]));
   const ev = await q(c2, `select reason from public.application_events where application_id=$1 and to_stage='rejected'`, [a2]);
   assert.equal(ev[0].reason, 'Role requires a degree');
   const a3 = await api.as(c3, async (s) => (await s('select public.apply_to_job($1) id', [job])).rows[0].id);
