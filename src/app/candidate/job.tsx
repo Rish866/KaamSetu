@@ -2,9 +2,10 @@ import { router, useLocalSearchParams } from 'expo-router';
 import React, { useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { AppShell } from '../../components/AppShell';
+import { ScorecardCard, type Scorecard } from '../../components/Scorecard';
 import { Banner, Chips, ConfirmDialog, Field, Row, SectionHead, StateView, unwrap, useLoad } from '../../components/kit';
 import { Card, Pill, PrimaryButton } from '../../components/ui';
-import { formatExperience, formatLocation, formatSalaryRange, friendlyError, labelize } from '../../lib/format';
+import { formatExperience, formatLocation, formatSalaryRange, friendlyError, labelize, timeAgo } from '../../lib/format';
 import { supabase } from '../../lib/supabase';
 import { colors } from '../../theme';
 
@@ -13,7 +14,7 @@ type Detail = {
   id: string; title: string; description: string; company: { name: string; verified: boolean; website: string | null; description: string | null; city: string | null };
   city: string | null; locality: string | null; work_mode: string; employment_type: string; salary_min: number; salary_max: number; salary_period: 'monthly' | 'annual';
   experience_min_months: number; experience_max_months: number | null; vacancies: number; closes_at: string | null; status: string; skills: { name: string; required: boolean }[];
-  saved: boolean; application_id: string | null;
+  saved: boolean; application_id: string | null; location_label?: string | null; last_confirmed_at?: string | null; scorecard?: Scorecard | null;
   match: { score: number; eligible: boolean; ineligible_reasons: string[]; confidence: number; version: number; components: Record<string, Component> };
 };
 const reportCategories = [['fee_requested', 'Asks for money'], ['fraud', 'Looks fake'], ['misleading', 'Misleading'], ['discrimination', 'Discriminatory'], ['other', 'Other']].map(([id, label]) => ({ id, label }));
@@ -38,7 +39,7 @@ export default function JobDetail() {
     setReporting(false); setMsg({ tone: 'success', text: 'Thank you. Our trust team will review this job.' });
   }
 
-  return <AppShell role="Candidate" title={data?.title ?? 'Job details'} subtitle={data ? `${data.company.name} · ${formatLocation(data.city, data.locality, data.work_mode)}` : 'Loading'}>
+  return <AppShell role="Candidate" title={data?.title ?? 'Job details'} subtitle={data ? `${data.company.name} · ${data.location_label ?? formatLocation(data.city, data.locality, data.work_mode)}` : 'Loading'}>
     <PrimaryButton label="Back to jobs" variant="ghost" icon="arrow-back" onPress={() => router.canGoBack() ? router.back() : router.replace('/candidate')} />
     <StateView loading={loading} error={error} onRetry={reload} empty={!data} emptyTitle="This job is no longer available" emptyText="It may have been closed or paused.">
       {data && <>
@@ -47,8 +48,9 @@ export default function JobDetail() {
           <Row><Pill>{formatSalaryRange(data.salary_min, data.salary_max, data.salary_period)}</Pill><Pill tone="neutral">{labelize(data.work_mode)}</Pill><Pill tone="neutral">{labelize(data.employment_type)}</Pill><Pill tone="neutral">Experience {formatExperience(data.experience_min_months)}{data.experience_max_months ? `–${formatExperience(data.experience_max_months)}` : '+'}</Pill>{data.company.verified && <Pill tone="saffron">Verified company</Pill>}</Row>
           <Text style={styles.body}>{data.description}</Text>
           <Row>{data.skills.map((s) => <Pill key={s.name} tone={s.required ? 'teal' : 'neutral'}>{s.name}{s.required ? '' : ' (nice to have)'}</Pill>)}</Row>
-          <Text style={styles.muted}>{data.vacancies} opening{data.vacancies === 1 ? '' : 's'}{data.closes_at ? ` · closes ${new Date(data.closes_at).toLocaleDateString('en-IN')}` : ''}</Text>
+          <Text style={styles.muted}>{data.vacancies} opening{data.vacancies === 1 ? '' : 's'}{data.closes_at ? ` · closes ${new Date(data.closes_at).toLocaleDateString('en-IN')}` : ''}{data.last_confirmed_at ? ` · employer confirmed it is still open ${timeAgo(data.last_confirmed_at)}` : ''}</Text>
         </Card>
+        {data.scorecard && <ScorecardCard s={data.scorecard} />}
         <SectionHead title={`Why this is a ${data.match.score}% match`} sub={`Scoring version ${data.match.version}. Missing profile data is scored neutrally and listed below.`} />
         <Card style={{ gap: 12 }}>
           {!data.match.eligible && <Banner tone="warn">This job is outside your stated preferences ({data.match.ineligible_reasons.map(labelize).join(', ').toLowerCase()}). You can still apply.</Banner>}

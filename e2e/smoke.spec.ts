@@ -6,7 +6,7 @@ const publicPages = ['/', '/login', '/privacy', '/terms', '/support'];
 // These checks are about this build, not about the database it happens to point at: report a current schema so the
 // maintenance redirect (covered in maintenance.spec.ts) does not race them. Tests that register their own routes win.
 test.beforeEach(async ({ page }) => {
-  await page.route('**/rest/v1/rpc/schema_version', (route) => route.fulfill({ json: '202611260002' }));
+  await page.route('**/rest/v1/rpc/schema_version', (route) => route.fulfill({ json: '202611260003' }));
 });
 
 test('every same-origin file the pages request exists, and no asset path contains node_modules', async ({ page }) => {

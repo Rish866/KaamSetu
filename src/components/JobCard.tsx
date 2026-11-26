@@ -7,12 +7,12 @@ import { colors } from '../theme';
 import { Card, Pill, PrimaryButton } from './ui';
 
 export type FeedJob = {
-  job_id: string; title: string; company_name: string; company_verified: boolean; city: string | null; locality: string | null; location_label?: string | null; work_mode: string;
+  job_id: string; title: string; company_id?: string; company_name: string; company_verified: boolean; city: string | null; locality: string | null; location_label?: string | null; work_mode: string;
   employment_type: string; salary_min: number; salary_max: number; salary_period: 'monthly' | 'annual'; experience_min_months: number;
   published_at: string | null; skills: string[]; saved: boolean; applied: boolean; score: number | null; eligible: boolean;
 };
 
-export function JobCard({ job, onOpen, onSave }: { job: FeedJob; onOpen: () => void; onSave: () => void }) {
+export function JobCard({ job, onOpen, onSave, trust }: { job: FeedJob; onOpen: () => void; onSave: () => void; trust?: string | null }) {
   return <Card style={styles.card}>
     <View style={styles.top}>
       <LinearGradient colors={['#6F70EE', '#28BED0']} style={styles.mark}><Text style={styles.letter}>{job.company_name[0]}</Text></LinearGradient>
@@ -23,6 +23,7 @@ export function JobCard({ job, onOpen, onSave }: { job: FeedJob; onOpen: () => v
       </View>
       <View accessibilityLabel={`Match score ${job.score ?? 'unavailable'} percent`} style={[styles.score, !job.eligible && styles.scoreOff]}><Text style={styles.scoreValue}>{job.score ?? '–'}%</Text><Text style={styles.scoreLabel}>{job.eligible ? 'match' : 'outside prefs'}</Text></View>
     </View>
+    {trust && <Text style={styles.meta}>{trust}</Text>}
     <View style={styles.row}>{job.skills.slice(0, 5).map((s) => <Pill key={s} tone="neutral">{s}</Pill>)}</View>
     <View style={styles.bottom}>
       <View><Text style={styles.small}>Salary · Experience {formatExperience(job.experience_min_months)}+</Text><Text style={styles.salary}>{formatSalaryRange(job.salary_min, job.salary_max, job.salary_period)}</Text></View>

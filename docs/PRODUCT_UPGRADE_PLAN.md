@@ -8,7 +8,7 @@ Production database changes are applied only after CI, a dry run and the owner's
 |------|-------|--------|
 | 1. Pan-India locations | 36 states/UTs, 737 districts, 19,300 PIN codes; type-ahead; job search by places, whole states, PIN prefix, remote; discovery by place; hierarchical location score; India-wide copy | **Deployed and production tested 2026-11-26**: migration applied (run 45774730159, backup production-backup-20261126T072158Z), website build 9e79b0f live, live journey 24/24 (run 45775467310) |
 | 2. Offer and joining milestones | offer issued/accepted/declined/withdrawn, joined day 1, no-show, retained day 15/30, left before day 30; both sides confirm, 7-day auto-confirm, disputes decided by admins with a reason | **Deployed and production tested 2026-11-26**: migration applied (run 45788629867, backup production-backup-20261126T090458Z), live journey 25/25 incl. accept → joined → confirmed (run 45789465170) |
-| 3. Employer accountability scorecard | median response time, 7-day response rate, offer-honoured and joining rates, "new employer" below the thresholds, 30-day auto-pause | Planned |
+| 3. Employer accountability scorecard | median response time, 7-day response rate, offers honoured, hires who joined, day-30 retention; "new employer" below the thresholds; 25-day reminder and 30-day auto-pause | **Written, tested locally** (PR) |
 | 4. Outcome-based hiring ledger | pending_milestone → payable → paid / waived / disputed, audited; candidates never charged; no payment gateway yet | Planned |
 | 5. DPDP | "joining verification" consent purpose; export and deletion cover new tables; updated notice and legal pack | Planned |
 
@@ -27,3 +27,12 @@ Production database changes are applied only after CI, a dry run and the owner's
   in Admin → Hiring disputes; a rejected report can be filed again.
 * Rules: no-show is employer-only; joining not before the agreed date and within the last 90 days; day 15/30 only after
   15/30 days from the joining day; offers cannot be withdrawn after joining.
+
+## Part 3 decisions
+* Window: last 365 days. Thresholds: response from 5 counted applications; offers, joining and retention from 3 outcomes each.
+  Below a threshold the metric reads "Not enough data yet (n of m needed)"; with nothing shown the company is a "New employer".
+* An application counts for response time once the employer acts, or once 7 days pass unanswered; applications the candidate
+  withdrew before any answer are left out. Joining and retention count only confirmed milestones.
+* Scorecards are visible to signed-in users for verified companies, and always to the company itself (dashboard).
+* Published jobs must be confirmed every 30 days ("Still hiring"); reminder at 25 days, automatic pause at 30 by the worker,
+  recorded as a system event. Publishing or resuming counts as confirmation.

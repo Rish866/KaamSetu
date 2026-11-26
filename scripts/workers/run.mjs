@@ -130,7 +130,12 @@ async function email() {
 }
 
 // Joining/retention reports the other side did not answer within 7 days become confirmed.
-async function hiring() { bump('milestones_auto_confirmed', (await must(db.rpc('hiring_milestones_auto_confirm'))) ?? 0); }
+async function hiring() {
+  bump('milestones_auto_confirmed', (await must(db.rpc('hiring_milestones_auto_confirm'))) ?? 0);
+  // Published jobs not re-confirmed for 25 days get a reminder; after 30 days they are paused.
+  const stale = (await must(db.rpc('jobs_stale_sweep'))) ?? {};
+  bump('jobs_reminded', stale.reminded ?? 0); bump('jobs_auto_paused', stale.paused ?? 0);
+}
 
 const tasks = { resumes, privacy, email, hiring };
 for (const [name, fn] of Object.entries(tasks)) {

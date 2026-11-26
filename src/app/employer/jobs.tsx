@@ -16,6 +16,7 @@ const tone = (s: string) => (s === 'published' ? 'teal' : s === 'rejected' ? 'co
 export default function EmployerJobs() {
   const { session } = useAuth(); const membership = useMembership(session!.user.id); const m = membership.data;
   const jobs = useLoad(async () => m ? ((unwrap(await supabase.rpc('company_jobs', { p_company: m.company.id })) ?? []) as unknown as J[]) : [], [m?.company.id]);
+  const fresh = useLoad(async () => m ? Object.fromEntries(((unwrap(await supabase.from('jobs').select('id,last_confirmed_at').eq('company_id', m.company.id).eq('status', 'published')) ?? []) as { id: string; last_confirmed_at: string | null }[]).map((r) => [r.id, r.last_confirmed_at])) : {}, [m?.company.id, jobs.data]);
   const [msg, setMsg] = useState<{ tone: 'error' | 'success'; text: string } | null>(null);
   const [confirm, setConfirm] = useState<{ job: J; to: 'closed' | 'paused' } | null>(null);
   const [history, setHistory] = useState<{ id: string; rows: { to_status: string; reason: string | null; created_at: string }[] } | null>(null);
@@ -38,10 +39,12 @@ export default function EmployerJobs() {
       <View style={{ gap: 12 }}>{(jobs.data ?? []).map((j) => <Card key={j.job_id} style={{ gap: 10 }}>
         <View style={styles.head}><View style={{ flex: 1 }}><Text style={styles.title}>{j.title}</Text><Text style={styles.muted}>{labelize(j.work_mode)}{j.city ? ` · ${j.city}` : ''} · {formatSalaryRange(j.salary_min, j.salary_max, j.salary_period)} · created {timeAgo(j.created_at)}</Text></View><Pill tone={tone(j.status)}>{labelize(j.status)}</Pill></View>
         {j.moderation_hold && <Banner tone="warn">{j.moderation_hold === 'admin' ? 'KaamSetu moderators have put this job on hold. Contact support to resolve it.' : 'This job was paused because your company is suspended.'}</Banner>}
+        {j.status === 'published' && fresh.data?.[j.job_id] && (() => { const days = Math.floor((Date.now() - Date.parse(fresh.data![j.job_id]!)) / 86400e3); return <Banner tone={days >= 25 ? 'warn' : 'info'}>{days >= 25 ? `Confirm this job is still open, or it will be paused automatically in ${Math.max(0, 30 - days)} day${30 - days === 1 ? '' : 's'}.` : `Confirmed still open ${days === 0 ? 'today' : `${days} day${days === 1 ? '' : 's'} ago`}. Jobs are paused automatically after 30 days without confirmation.`}</Banner>; })()}
         <Text style={styles.muted}>{j.applicants} applicant{j.applicants === 1 ? '' : 's'}{j.new_applicants ? ` · ${j.new_applicants} new` : ''}</Text>
         <Row>
           <PrimaryButton label="Applicants" icon="people-outline" variant="secondary" onPress={() => router.push({ pathname: '/employer/job', params: { id: j.job_id } })} />
           {canEdit && (j.status === 'draft' || j.status === 'rejected') && <><PrimaryButton label="Edit" variant="secondary" icon="create-outline" onPress={() => router.push(`/post-job?id=${j.job_id}`)} /><PrimaryButton label="Submit for review" icon="paper-plane-outline" disabled={!verified} onPress={() => run(() => supabase.rpc('submit_job_for_review', { p_job: j.job_id }), 'Submitted. A reviewer will check it shortly.')} /></>}
+          {canEdit && j.status === 'published' && <PrimaryButton label="Still hiring" icon="checkmark-done-outline" onPress={() => run(() => supabase.rpc('confirm_job_active', { p_job: j.job_id }), 'Thanks. The job stays open for another 30 days.')} />}
           {canEdit && j.status === 'published' && <PrimaryButton label="Pause" variant="secondary" onPress={() => setConfirm({ job: j, to: 'paused' })} />}
           {canEdit && j.status === 'paused' && !j.moderation_hold && <PrimaryButton label="Resume" onPress={() => run(() => supabase.rpc('set_job_status', { p_job: j.job_id, p_to: 'published' }), 'Job is live again.')} />}
           {canEdit && (j.status === 'published' || j.status === 'paused') && <PrimaryButton label="Close" variant="secondary" icon="close-circle-outline" onPress={() => setConfirm({ job: j, to: 'closed' })} />}

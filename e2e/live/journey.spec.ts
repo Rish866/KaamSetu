@@ -94,6 +94,13 @@ test('9-10. employer creates a job; admin approves it', async () => {
   await expect(a.getByText(/recorded in the audit log/)).toBeVisible();
 });
 
+test('10b. employer confirms the job is still open', async () => {
+  await e.goto(`${env.base}/employer/jobs`);
+  await inCard(e, jobTitle, 'Still hiring');
+  await expect(e.getByText('Thanks. The job stays open for another 30 days.')).toBeVisible();
+  await expect(card(e, jobTitle, 'Still hiring').getByText(/Confirmed still open today/)).toBeVisible();
+});
+
 test('11-12. candidate searches, sees an explainable match and applies', async () => {
   await c.goto(`${env.base}/candidate`);
   await c.waitForLoadState('networkidle');
@@ -108,6 +115,9 @@ test('11-12. candidate searches, sees an explainable match and applies', async (
   await inCard(c, jobTitle, 'View details');
   await expect(c.getByText(/Why this is a \d+% match/)).toBeVisible({ timeout: 20_000 });
   await expect(c.getByText(/Matches 2 of 2 listed skills/)).toBeVisible();
+  // A brand-new QA company has no hiring history: the scorecard says so instead of showing numbers.
+  await expect(c.getByText('Employer reliability')).toBeVisible();
+  await expect(c.getByText('New employer', { exact: true })).toBeVisible();
   await btn(c, 'Apply with my profile').click();
   await confirmDialog(c, 'Send application');
   await expect(c.getByText(/Application sent/)).toBeVisible();

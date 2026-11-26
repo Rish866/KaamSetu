@@ -470,7 +470,7 @@ export type Database = {
           job_id: string;
           from_status: Database['public']['Enums']['job_status'] | null;
           to_status: Database['public']['Enums']['job_status'];
-          actor_id: string;
+          actor_id: string | null;
           reason: string | null;
           created_at: string;
         };
@@ -479,7 +479,7 @@ export type Database = {
           job_id: string;
           from_status?: Database['public']['Enums']['job_status'] | null;
           to_status: Database['public']['Enums']['job_status'];
-          actor_id: string;
+          actor_id?: string | null;
           reason?: string | null;
           created_at?: string;
         };
@@ -551,6 +551,8 @@ export type Database = {
           created_at: string;
           updated_at: string;
           moderation_hold: string | null;
+          last_confirmed_at: string | null;
+          stale_reminder_at: string | null;
         };
         Insert: {
           id?: string;
@@ -574,6 +576,8 @@ export type Database = {
           created_at?: string;
           updated_at?: string;
           moderation_hold?: string | null;
+          last_confirmed_at?: string | null;
+          stale_reminder_at?: string | null;
         };
         Update: Partial<Database['public']['Tables']['jobs']['Insert']>;
         Relationships: [];
@@ -915,10 +919,14 @@ export type Database = {
       company_interviews: { Args: Record<string, unknown>; Returns: unknown };
       /** (p_company uuid) => TABLE(job_id uuid, title text, status job_status, moderation_hold text, work_mode text, city text, salary_min integer, salary_max integer, salary_period text, applicants integer, new_applicants integer, published_at timestamp with time zone, created_at timestamp with time zone, closes_at timestamp with time zone) */
       company_jobs: { Args: Record<string, unknown>; Returns: unknown };
+      /** (p_companies uuid[]) => SETOF jsonb */
+      company_scorecards: { Args: Record<string, unknown>; Returns: unknown };
       /** (p_company uuid) => TABLE(user_id uuid, display_name text, email text, role company_role, active boolean, joined_at timestamp with time zone) */
       company_team: { Args: Record<string, unknown>; Returns: unknown };
       /** (p_milestone uuid) => void */
       confirm_hiring_milestone: { Args: Record<string, unknown>; Returns: unknown };
+      /** (p_job uuid) => timestamp with time zone */
+      confirm_job_active: { Args: Record<string, unknown>; Returns: unknown };
       /** (legal_name text, display_name text, city text DEFAULT NULL::text, website text DEFAULT NULL::text) => uuid */
       create_employer_company: { Args: Record<string, unknown>; Returns: unknown };
       /** () => TABLE(account_kind text, display_name text, is_admin boolean, status account_status) */
