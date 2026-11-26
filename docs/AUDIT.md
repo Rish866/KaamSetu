@@ -26,6 +26,7 @@ Status words: Written → Locally tested → CI tested → Merged → Deployed �
 * 2026-11-20 22:08–22:35 UTC: owner merged PR #3, deployed the website, ran `backup` and `apply`. Migrations 0001–0006 applied; post-apply checks passed in the same run.
 * 2026-11-21: post-release verification found the missing-icon defect (PR #5) and ran the first restore drill.
 * 2026-11-21: live journey passed in production (run 44873263273).
+* 2026-11-26: DPDP hiring-data changes (migration 202611260005), notice 2026-11-26.2 and legal pack v2 deployed; live journey 26/26. Investor-feedback upgrade complete.
 * 2026-11-26: hiring ledger (migration 202611260004) applied and deployed; hire fees OFF (₹0).
 * 2026-11-26: employer scorecard and stale-job auto-pause (migration 202611260003) applied and deployed; live journey 26/26.
 * 2026-11-26: offer and joining milestones (migration 202611260002) applied and deployed; live journey 25/25.
