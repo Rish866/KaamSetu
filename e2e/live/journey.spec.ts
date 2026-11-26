@@ -175,6 +175,23 @@ test('19. candidate sees every status update', async () => {
   for (const t of ['You have an offer', 'You were shortlisted', 'Interview changed']) await expect(c.getByText(t).first()).toBeVisible();
 });
 
+test('19b. candidate accepts the offer; employer records joining; candidate confirms it', async () => {
+  await c.goto(`${env.base}/candidate/applications`);
+  await btn(c, 'Accept offer').click();
+  await expect(c.getByText('Offer accepted. Congratulations!')).toBeVisible();
+  await expect(c.getByText(/Offer accepted ·/)).toBeVisible();
+  await e.reload();
+  await btn(e, 'Candidate joined').click();
+  await btn(e, 'Save').click();
+  await expect(e.getByText('Recorded. The other side will be asked to confirm.')).toBeVisible();
+  await c.reload();
+  await expect(c.getByText('Please confirm', { exact: true })).toBeVisible({ timeout: 20_000 });
+  await btn(c, 'Confirm').click();
+  await expect(c.getByText('Confirmed: Joined (day 1).')).toBeVisible();
+  await e.reload();
+  await expect(e.getByText(/Joined \(day 1\) ·/)).toBeVisible({ timeout: 20_000 });
+});
+
 test('20. candidate downloads a personal-data export', async () => {
   await c.goto(`${env.base}/candidate/settings`);
   const dl = c.waitForEvent('download');
@@ -183,7 +200,7 @@ test('20. candidate downloads a personal-data export', async () => {
   expect(file.suggestedFilename()).toMatch(/^kaamsetu-my-data-\d{4}-\d{2}-\d{2}\.json$/);
   const body = JSON.parse(readFileSync(await file.path(), 'utf8'));
   expect(body.account.email).toBe(cand.email);
-  expect(body.applications[0].stage).toBe('offer');
+  expect(body.applications[0].stage).toBe('hired'); // the candidate accepted the offer in step 19b
   expect(JSON.stringify(body)).not.toContain(emp.email);
 });
 

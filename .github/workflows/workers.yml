@@ -9,7 +9,7 @@ on:
   workflow_dispatch:
     inputs:
       task:
-        description: all | resumes | privacy | email
+        description: all | resumes | privacy | email | hiring
         default: all
 
 permissions:

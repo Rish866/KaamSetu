@@ -78,14 +78,15 @@ test('application pipeline enforces valid transitions and records every event', 
   assert.match(await failure(api.as(cand, (s) => s(`select public.respond_to_interview($1,'confirm')`, [iv2]))) ?? '', /cannot be/);
   assert.match(await failure(t('rejected', 'no')) ?? '', /reason/);
   await t('offer', null, 'CTC 6.5 LPA, joining 1 Jan');
-  await t('hired');
+  assert.match(await failure(t('hired')) ?? '', /candidate accepts the offer/, 'employers cannot mark a hire themselves');
+  await api.as(cand, (s) => s('select public.respond_to_offer($1, true)', [appId]));
   assert.match(await failure(t('rejected', 'changed our mind')) ?? '', /Cannot move/);
   const events = (await q(cand, 'select from_stage, to_stage from public.application_events where application_id=$1 order by created_at, id', [appId])).map((e) => `${e.from_stage ?? '-'}>${e.to_stage}`);
   assert.deepEqual(events, ['->applied', 'applied>viewed', 'viewed>shortlisted', 'shortlisted>interview', 'interview>offer', 'offer>hired']);
   const kinds = (await q(cand, 'select kind from public.notifications order by created_at, id')).map((n) => n.kind);
-  for (const k of ['application.viewed', 'application.shortlisted', 'interview.proposed', 'interview.changed', 'application.offer', 'application.hired']) assert.ok(kinds.includes(k), `missing notification ${k}`);
+  for (const k of ['application.viewed', 'application.shortlisted', 'interview.proposed', 'interview.changed', 'application.offer']) assert.ok(kinds.includes(k), `missing notification ${k}`);
   const emp = (await q(co.owner, 'select kind from public.notifications')).map((n) => n.kind);
-  assert.ok(emp.includes('application.received') && emp.includes('interview.reschedule_requested') && emp.includes('interview.confirmed'));
+  assert.ok(emp.includes('application.received') && emp.includes('interview.reschedule_requested') && emp.includes('interview.confirmed') && emp.includes('hiring.offer_accepted'));
   const sensitive = (await api.q('select title, body from public.notifications')).rows;
   assert.ok(sensitive.every((n) => !/@|\+91|Flow Candidate/.test(n.title + n.body)), 'notifications must not contain PII');
 });

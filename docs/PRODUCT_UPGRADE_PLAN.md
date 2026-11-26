@@ -7,7 +7,7 @@ Production database changes are applied only after CI, a dry run and the owner's
 | Part | Scope | Status |
 |------|-------|--------|
 | 1. Pan-India locations | 36 states/UTs, 737 districts, 19,300 PIN codes; type-ahead; job search by places, whole states, PIN prefix, remote; discovery by place; hierarchical location score; India-wide copy | **Deployed and production tested 2026-11-26**: migration applied (run 45774730159, backup production-backup-20261126T072158Z), website build 9e79b0f live, live journey 24/24 (run 45775467310) |
-| 2. Offer and joining milestones | offer issued/accepted/withdrawn, joined day 1, retained day 15/30, no-show; both sides confirm; disputes to admin with a reason | Next |
+| 2. Offer and joining milestones | offer issued/accepted/declined/withdrawn, joined day 1, no-show, retained day 15/30, left before day 30; both sides confirm, 7-day auto-confirm, disputes decided by admins with a reason | **Written, tested locally** (PR) |
 | 3. Employer accountability scorecard | median response time, 7-day response rate, offer-honoured and joining rates, "new employer" below the thresholds, 30-day auto-pause | Planned |
 | 4. Outcome-based hiring ledger | pending_milestone → payable → paid / waived / disputed, audited; candidates never charged; no payment gateway yet | Planned |
 | 5. DPDP | "joining verification" consent purpose; export and deletion cover new tables; updated notice and legal pack | Planned |
@@ -18,3 +18,12 @@ Production database changes are applied only after CI, a dry run and the owner's
 * `job_feed` and `search_candidates` are kept unchanged for the previously deployed website; the new site uses
   `job_search` and `discover_candidates`.
 * Coordinates and radius search are deferred: the official dataset's coordinates are unreliable.
+
+## Part 2 decisions
+* "Make offer" records `offer_issued` automatically. Only the candidate turns an offer into a hire (accept), or declines it.
+  Employers can no longer mark a candidate "hired" themselves (enforced by a trigger).
+* Joining and retention are reported by one side and confirmed or disputed by the other. Reports nobody answers within
+  7 days are confirmed by the background worker (`hiring_milestones_auto_confirm`, every 15 minutes). Admins decide disputes
+  in Admin → Hiring disputes; a rejected report can be filed again.
+* Rules: no-show is employer-only; joining not before the agreed date and within the last 90 days; day 15/30 only after
+  15/30 days from the joining day; offers cannot be withdrawn after joining.
