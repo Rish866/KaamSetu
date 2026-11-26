@@ -3,7 +3,7 @@
 // Accounts are qa+<run>-...; the candidate and employer are deleted at the end through the product's own deletion flow.
 import { readFileSync } from 'node:fs';
 import { expect, test, type Page } from '@playwright/test';
-import { btn, card, configured, confirmDialog, env, expectPortal, inCard, password, qaEmail, reason, signIn, signUp, uploadResume } from './helpers';
+import { btn, card, choosePlace, configured, confirmDialog, env, expectPortal, inCard, password, qaEmail, reason, signIn, signUp, uploadResume } from './helpers';
 
 test.skip(!configured, 'LIVE_BASE_URL, LIVE_ADMIN_EMAIL and LIVE_ADMIN_PASSWORD are required');
 test.describe.configure({ mode: 'serial' });
@@ -31,7 +31,7 @@ test('2. candidate completes the profile', async () => {
   await btn(c, 'Employed').click();
   await c.getByRole('textbox', { name: 'Total experience (years)' }).fill('3');
   await c.getByRole('textbox', { name: 'Expected salary (₹)' }).fill('600000');
-  await c.getByRole('button', { name: 'Thane', exact: true }).first().click();
+  await choosePlace(c, 'Where do you live now?', 'Thane', 'Thane, Maharashtra');
   await btn(c, 'Save profile').click();
   await expect(c.getByText('Profile saved.')).toBeVisible();
   // Builds before 2026-11-21 show "Profile saved." before the reload that resets the form; let it finish first.
@@ -80,7 +80,7 @@ test('9-10. employer creates a job; admin approves it', async () => {
   await e.getByRole('textbox', { name: 'Job title' }).fill(jobTitle);
   await e.getByRole('textbox', { name: 'Description' }).fill('Lead a small customer support team. This is an automated QA listing and will be closed after the test.');
   await btn(e, 'Hybrid').click();
-  await e.getByRole('button', { name: 'Thane', exact: true }).first().click();
+  await choosePlace(e, 'Job location', 'Thane', 'Thane, Maharashtra');
   for (const s of ['CRM', 'Customer support']) await btn(e, s).click();
   await e.getByRole('textbox', { name: 'Minimum annual salary (₹)' }).fill('500000');
   await e.getByRole('textbox', { name: 'Maximum annual salary (₹)' }).fill('700000');

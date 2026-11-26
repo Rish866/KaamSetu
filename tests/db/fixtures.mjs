@@ -1,7 +1,11 @@
 import { createDb } from './harness.mjs';
 
+// Specific places first: "Delhi" is both a city and a union territory ("entire state") place.
 export const loc = async (api, city, locality = null) =>
-  (await api.q('select id from public.locations where city = $1 and locality is not distinct from $2', [city, locality])).rows[0].id;
+  (await api.q(`select id from public.locations where city = $1 and locality is not distinct from $2 and kind not in ('state', 'pin')
+                order by case kind when 'locality' then 0 when 'city' then 1 else 2 end limit 1`, [city, locality])).rows[0].id;
+export const pinLoc = async (api, pin) => (await api.q(`select id from public.locations where kind = 'pin' and pincode = $1`, [pin])).rows[0].id;
+export const stateLoc = async (api, code) => (await api.q(`select id from public.locations where kind = 'state' and state_code = $1`, [code])).rows[0].id;
 export const skill = async (api, name) =>
   (await api.q('select id from public.skills where name = $1', [name])).rows[0].id;
 
@@ -23,7 +27,7 @@ export async function makeJob(api, admin, company, o = {}) {
     title: 'Customer Success Executive', salary_min: 500000, salary_max: 700000, salary_period: 'annual',
     exp_min: 12, exp_max: 48, work_mode: 'hybrid', employment_type: 'full_time', city: 'Navi Mumbai', locality: null,
     skills: ['CRM', 'Customer support'], publish: true, ...o };
-  const locationId = d.work_mode === 'remote' && !d.city ? null : await loc(api, d.city, d.locality);
+  const locationId = d.location_id !== undefined ? d.location_id : d.work_mode === 'remote' && !d.city ? null : await loc(api, d.city, d.locality);
   const jobId = await api.as(company.owner, async (sql) => {
     const r = await sql(
       `insert into public.jobs (company_id, title, description, salary_min, salary_max, salary_period,
@@ -49,7 +53,7 @@ export async function makeCandidate(api, name, o = {}) {
     await sql(
       `update public.candidate_profiles set headline=$2, experience_months=$3, salary_min=$4, salary_period='annual',
          current_location_id=$5, updated_at=now() where user_id=$1`,
-      [c.id, d.headline ?? 'Customer success professional', d.months, d.salary, await loc(api, d.city, d.locality ?? null)]);
+      [c.id, d.headline ?? 'Customer success professional', d.months, d.salary, d.location_id ?? await loc(api, d.city, d.locality ?? null)]);
     for (const s of d.skills)
       await sql('insert into public.candidate_skills (candidate_id, skill_id, confirmed) values ($1,$2,true)', [c.id, await skill(api, s)]);
     if (d.discovery) await sql(`select public.set_consent('employer_discovery', true, '2026-11-18')`);

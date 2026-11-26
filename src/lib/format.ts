@@ -24,7 +24,7 @@ export function formatExperience(months: number | null | undefined): string {
 }
 
 export function formatLocation(city?: string | null, locality?: string | null, workMode?: string | null): string {
-  if (workMode === 'remote') return 'Remote';
+  if (workMode === 'remote') return 'Remote (anywhere in India)';
   return [locality, city].filter(Boolean).join(', ') || 'Location not specified';
 }
 

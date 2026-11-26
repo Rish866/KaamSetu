@@ -11,7 +11,7 @@ test('feature graphic', async ({ page }) => {
     <img src="${icon}" style="width:200px;height:200px;border-radius:44px;box-shadow:0 20px 60px rgba(0,0,0,.35)">
     <div><div style="font-size:64px;font-weight:900;letter-spacing:-2px">KaamSetu</div>
     <div style="font-size:30px;line-height:1.3;color:#D9DEEA;margin-top:12px;max-width:600px">Verified jobs. Visible salaries.<br>Match scores that explain themselves.</div>
-    <div style="font-size:20px;color:#F6B84A;margin-top:22px;font-weight:700">Mumbai · Navi Mumbai · Thane · Pune</div></div></body></html>`);
+    <div style="font-size:20px;color:#F6B84A;margin-top:22px;font-weight:700">Verified jobs across India</div></div></body></html>`);
   await page.screenshot({ path: 'store/graphics/feature-graphic-1024x500.png' });
 });
 

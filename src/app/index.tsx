@@ -14,7 +14,7 @@ export default function HomeScreen() {
     <View style={styles.header}><Logo />{desktop && <View style={styles.headerLinks}><Link href={{ pathname: '/login', params: { role: 'candidate' } }} style={styles.headerLink}>For candidates</Link><Link href={{ pathname: '/login', params: { role: 'employer' } }} style={styles.headerLink}>For employers</Link><Link href={{ pathname: '/login', params: { role: 'admin' } }} style={styles.headerLink}>Admin sign in</Link></View>}<LinkButton label="Sign in" href="/login" variant="secondary" /></View>
     <LinearGradient colors={['#171B3D', '#25275A', '#184B64']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={[styles.hero, !desktop && styles.heroMobile]}>
       <View style={styles.heroGlowOne} /><View style={styles.heroGlowTwo} />
-      <View style={styles.heroCopy}><Pill tone="saffron">Built for Mumbai, Navi Mumbai, Thane & Pune</Pill><Text style={[styles.heroTitle, !desktop && styles.heroTitleMobile]}>Stop chasing jobs. Let the right work find you.</Text><Text style={styles.heroText}>KaamSetu connects skilled people with verified employers using transparent salaries, consent-first profiles, and match scores that explain themselves.</Text>
+      <View style={styles.heroCopy}><Pill tone="saffron">Verified jobs across India</Pill><Text style={[styles.heroTitle, !desktop && styles.heroTitleMobile]}>Stop chasing jobs. Let the right work find you.</Text><Text style={styles.heroText}>KaamSetu connects skilled people with verified employers using transparent salaries, consent-first profiles, and match scores that explain themselves.</Text>
         <View style={styles.actions}><LinkButton label="I’m looking for work" href={{ pathname: '/login', params: { role: 'candidate' } }} /><LinkButton label="I’m hiring" href={{ pathname: '/login', params: { role: 'employer' } }} variant="secondary" /></View>
         <View style={styles.trustRow}><View style={styles.trustItem}><Ionicons name="shield-checkmark" size={18} color={colors.teal} /><Text style={styles.trustText}>Verified employers</Text></View><View style={styles.trustItem}><Ionicons name="eye-off" size={18} color={colors.teal} /><Text style={styles.trustText}>Contact details stay private</Text></View></View>
       </View>
@@ -31,7 +31,7 @@ export default function HomeScreen() {
       </View>
     </View>
     <LinearGradient colors={['#171B3D', '#26285C']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.cta}><View style={styles.ctaOrb} /><View style={styles.ctaCopy}><Text style={styles.ctaTitle}>A better first step for every job search.</Text><Text style={styles.ctaText}>Create your secure candidate account to view jobs and manage applications.</Text></View><LinkButton label="Create candidate account" href={{ pathname: '/login', params: { role: 'candidate' } }} /></LinearGradient>
-    <View style={styles.footerRow}><Text style={styles.footer}>KaamSetu by Aarvya Global Ventures LLP · Mumbai, Navi Mumbai, Thane and Pune</Text><Link href="/privacy" style={styles.footerLink}>Privacy</Link><Link href="/terms" style={styles.footerLink}>Terms</Link><Link href="/support" style={styles.footerLink}>Support</Link></View>
+    <View style={styles.footerRow}><Text style={styles.footer}>KaamSetu by Aarvya Global Ventures LLP · Jobs across India</Text><Link href="/privacy" style={styles.footerLink}>Privacy</Link><Link href="/terms" style={styles.footerLink}>Terms</Link><Link href="/support" style={styles.footerLink}>Support</Link></View>
   </ScrollView></SafeAreaView>;
 }
 

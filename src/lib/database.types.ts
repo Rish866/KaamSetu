@@ -356,6 +356,20 @@ export type Database = {
         Update: Partial<Database['public']['Tables']['contact_disclosures']['Insert']>;
         Relationships: [];
       };
+      districts: {
+        Row: {
+          id: string;
+          state_code: string;
+          name: string;
+        };
+        Insert: {
+          id?: string;
+          state_code: string;
+          name: string;
+        };
+        Update: Partial<Database['public']['Tables']['districts']['Insert']>;
+        Relationships: [];
+      };
       interviews: {
         Row: {
           id: string;
@@ -523,15 +537,29 @@ export type Database = {
           latitude: number | null;
           longitude: number | null;
           active: boolean;
+          kind: string;
+          state_code: string;
+          district_id: string | null;
+          district: string | null;
+          pincode: string | null;
+          aliases: string | null;
+          search_text: string | null;
         };
         Insert: {
           id?: string;
           city: string;
           locality?: string | null;
-          state?: string;
+          state: string;
           latitude?: number | null;
           longitude?: number | null;
           active?: boolean;
+          kind?: string;
+          state_code: string;
+          district_id?: string | null;
+          district?: string | null;
+          pincode?: string | null;
+          aliases?: string | null;
+          search_text?: string | null;
         };
         Update: Partial<Database['public']['Tables']['locations']['Insert']>;
         Relationships: [];
@@ -756,6 +784,20 @@ export type Database = {
         Update: Partial<Database['public']['Tables']['skills']['Insert']>;
         Relationships: [];
       };
+      states: {
+        Row: {
+          code: string;
+          name: string;
+          kind: string;
+        };
+        Insert: {
+          code: string;
+          name: string;
+          kind: string;
+        };
+        Update: Partial<Database['public']['Tables']['states']['Insert']>;
+        Relationships: [];
+      };
     };
     Views: Record<string, never>;
     Functions: {
@@ -829,6 +871,8 @@ export type Database = {
       deactivate_member: { Args: Record<string, unknown>; Returns: unknown };
       /** (p_resume uuid) => text */
       delete_resume: { Args: Record<string, unknown>; Returns: unknown };
+      /** (p_job uuid, p_skill text DEFAULT NULL::text, p_places uuid[] DEFAULT NULL::uuid[], p_states text[] DEFAULT NULL::text[], p_min_months integer DEFAULT NULL::integer, p_max_months integer DEFAULT NULL::integer, p_max_salary integer DEFAULT NULL::integer, p_limit integer DEFAULT 25) => TABLE(candidate_id uuid, headline text, city text, locality text, state_name text, location_label text, experience_months integer, expected_salary integer, salary_period text, notice_days integer, skills text[], score numeric, match jsonb) */
+      discover_candidates: { Args: Record<string, unknown>; Returns: unknown };
       /** (p_job uuid) => uuid */
       duplicate_job: { Args: Record<string, unknown>; Returns: unknown };
       /** (p_company uuid) => jsonb */
@@ -845,6 +889,8 @@ export type Database = {
       job_detail: { Args: Record<string, unknown>; Returns: unknown };
       /** (p_query text DEFAULT NULL::text, p_city text DEFAULT NULL::text, p_locality text DEFAULT NULL::text, p_min_salary integer DEFAULT NULL::integer, p_max_exp_months integer DEFAULT NULL::integer, p_work_mode text DEFAULT NULL::text, p_category uuid DEFAULT NULL::uuid, p_employment_type text DEFAULT NULL::text, p_sort text DEFAULT 'match'::text, p_saved_only boolean DEFAULT false, p_limit integer DEFAULT 30, p_offset integer DEFAULT 0) => TABLE(job_id uuid, title text, company_id uuid, company_name text, company_verified boolean, city text, locality text, work_mode text, employment_type text, salary_min integer, salary_max integer, salary_period text, annual_max numeric, experience_min_months integer, published_at timestamp with time zone, skills text[], saved boolean, applied boolean, score numeric, eligible boolean, match jsonb) */
       job_feed: { Args: Record<string, unknown>; Returns: unknown };
+      /** (p_query text DEFAULT NULL::text, p_places uuid[] DEFAULT NULL::uuid[], p_states text[] DEFAULT NULL::text[], p_pin_prefix text DEFAULT NULL::text, p_include_remote boolean DEFAULT true, p_min_salary integer DEFAULT NULL::integer, p_max_exp_months integer DEFAULT NULL::integer, p_work_mode text DEFAULT NULL::text, p_category uuid DEFAULT NULL::uuid, p_employment_type text DEFAULT NULL::text, p_sort text DEFAULT 'match'::text, p_saved_only boolean DEFAULT false, p_limit integer DEFAULT 30, p_offset integer DEFAULT 0) => TABLE(job_id uuid, title text, company_id uuid, company_name text, company_verified boolean, city text, locality text, district text, state_code text, state_name text, pincode text, location_label text, work_mode text, employment_type text, salary_min integer, salary_max integer, salary_period text, annual_max numeric, experience_min_months integer, published_at timestamp with time zone, skills text[], saved boolean, applied boolean, score numeric, eligible boolean, match jsonb) */
+      job_search: { Args: Record<string, unknown>; Returns: unknown };
       /** (p_job uuid) => TABLE(application_id uuid, candidate_id uuid, display_name text, headline text, experience_months integer, stage application_stage, applied_at timestamp with time zone, note text, score numeric, match jsonb) */
       list_job_applicants: { Args: Record<string, unknown>; Returns: unknown };
       /** () => void */
@@ -889,6 +935,8 @@ export type Database = {
       schema_version: { Args: Record<string, unknown>; Returns: unknown };
       /** (p_job uuid, p_skill text DEFAULT NULL::text, p_city text DEFAULT NULL::text, p_min_months integer DEFAULT NULL::integer, p_max_months integer DEFAULT NULL::integer, p_max_salary integer DEFAULT NULL::integer, p_limit integer DEFAULT 25) => TABLE(candidate_id uuid, headline text, city text, locality text, experience_months integer, expected_salary integer, salary_period text, notice_days integer, skills text[], score numeric, match jsonb) */
       search_candidates: { Args: Record<string, unknown>; Returns: unknown };
+      /** (p_query text, p_kinds text[] DEFAULT NULL::text[], p_limit integer DEFAULT 20) => TABLE(id uuid, kind text, label text, city text, locality text, district text, state_code text, state_name text, pincode text) */
+      search_locations: { Args: Record<string, unknown>; Returns: unknown };
       /** (p_purpose text, p_granted boolean, p_notice_version text) => void */
       set_consent: { Args: Record<string, unknown>; Returns: unknown };
       /** (p_job uuid, p_to job_status, p_reason text DEFAULT NULL::text) => void */
