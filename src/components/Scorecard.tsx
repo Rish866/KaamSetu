@@ -11,6 +11,10 @@ export type Scorecard = {
   offers: Metric<{ withdrawn: number | null; honoured_pct: number | null }>;
   joining: Metric<{ joined_pct: number | null }>;
   retention: Metric<{ day_30_pct: number | null }>;
+  verification?: { method: string | null; verified_on: string | null };
+  commitment?: { review_days: number | null; sample: number; met_pct: number | null };
+  evidence?: { both_sides: number; auto_confirmed: number; decided_by_kaamsetu: number };
+  outcome_reasons?: Record<string, { label: string; category: string; count: number }>;
 };
 
 export async function loadScorecards(companyIds: string[]): Promise<Record<string, Scorecard>> {
@@ -30,8 +34,10 @@ export function formatHours(h: number): string {
 /** One short line for job cards. */
 export function scorecardLine(s?: Scorecard | null): string | null {
   if (!s) return null;
-  if (s.new_employer) return 'New employer on KaamSetu: not enough hiring history yet';
-  const parts = [];
+  const parts: string[] = [];
+  if (s.verification?.method) parts.push(`Verified by ${s.verification.method}`);
+  if (s.commitment?.review_days) parts.push(`replies within ${s.commitment.review_days} day${s.commitment.review_days === 1 ? '' : 's'}${s.commitment.met_pct !== null ? ` (kept ${s.commitment.met_pct}% of the time)` : ''}`);
+  if (s.new_employer) return parts.length ? [...parts, 'new employer: not enough hiring history yet'].join(' · ') : 'New employer on KaamSetu: not enough hiring history yet';
   if (s.response.shown && s.response.median_hours !== null) parts.push(`usually responds in ${formatHours(s.response.median_hours)}`);
   if (s.offers.shown) parts.push(`${s.offers.honoured_pct}% of offers honoured`);
   if (s.joining.shown) parts.push(`${s.joining.joined_pct}% of hires joined`);
@@ -57,6 +63,11 @@ export function ScorecardCard({ s, own = false }: { s: Scorecard; own?: boolean 
       detail={s.joining.shown ? `Confirmed joinings vs. no-shows (${s.joining.sample})` : nd(s.joining.sample, 3)} />
     <Row label="Still working at day 30" value={s.retention.shown ? `${s.retention.day_30_pct}%` : '–'}
       detail={s.retention.shown ? `${s.retention.sample} confirmed outcomes` : nd(s.retention.sample, 3)} />
+    {s.commitment?.review_days ? <Row label="Review commitment" value={s.commitment.met_pct !== null ? `${s.commitment.met_pct}% kept` : '–'}
+      detail={`Promises to reply within ${s.commitment.review_days} day${s.commitment.review_days === 1 ? '' : 's'}. ${s.commitment.met_pct !== null ? `Measured on ${s.commitment.sample} applications.` : nd(s.commitment.sample, 5)}`} /> : null}
+    {s.verification?.method && <Text style={styles.detail}>Company verified by KaamSetu using its {s.verification.method}{s.verification.verified_on ? ` on ${new Date(`${s.verification.verified_on}T00:00:00`).toLocaleDateString('en-IN')}` : ''}. The number itself is never shown.</Text>}
+    {s.evidence && (s.evidence.both_sides + s.evidence.auto_confirmed + s.evidence.decided_by_kaamsetu) > 0 && <Text style={styles.detail}>How joining outcomes were confirmed: {s.evidence.both_sides} by both sides, {s.evidence.auto_confirmed} automatically after 7 days without reply, {s.evidence.decided_by_kaamsetu} decided by KaamSetu.</Text>}
+    {s.outcome_reasons && Object.keys(s.outcome_reasons).length > 0 && <Text style={styles.detail}>Why offers or hires did not complete: {Object.values(s.outcome_reasons).sort((a, b) => b.count - a.count).map((r) => `${r.label} (${r.count})`).join(', ')}.</Text>}
     <Text style={styles.detail}>{s.active_jobs} open job{s.active_jobs === 1 ? '' : 's'}. Joining and retention count only outcomes confirmed by both sides or decided by KaamSetu.</Text>
   </Card>;
 }

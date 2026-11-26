@@ -12,12 +12,14 @@ import { colors } from '../../theme';
 type Member = { user_id: string; display_name: string; email: string | null; role: string; active: boolean };
 type Inv = { id: string; email: string; role: string; status: string; expires_at: string };
 const roles = [['recruiter', 'Recruiter'], ['viewer', 'Viewer']].map(([id, label]) => ({ id, label }));
+const commitOptions = [['none', 'No promise'], ['2', '2 days'], ['3', '3 days'], ['5', '5 days'], ['7', '7 days'], ['14', '14 days']].map(([id, label]) => ({ id, label }));
 const sizes = ['1-10', '11-50', '51-200', '201-1000', '1000+'].map((id) => ({ id, label: id }));
 
 export default function Team() {
   const { session } = useAuth(); const uid = session!.user.id; const membership = useMembership(uid); const m = membership.data; const owner = m?.role === 'owner';
   const team = useLoad(async () => m ? ((unwrap(await supabase.rpc('company_team', { p_company: m.company.id })) ?? []) as unknown as Member[]) : [], [m?.company.id]);
   const invs = useLoad(async () => m && owner ? ((unwrap(await supabase.from('company_invitations').select('id,email,role,status,expires_at').eq('company_id', m.company.id).eq('status', 'pending')) ?? []) as Inv[]) : [], [m?.company.id, owner]);
+  const commit = useLoad(async () => m ? (unwrap(await supabase.from('companies').select('review_commitment_days').eq('id', m.company.id).single())?.review_commitment_days ?? null) : null, [m?.company.id]);
   const [msg, setMsg] = useState<{ tone: 'error' | 'success'; text: string } | null>(null);
   const [email, setEmail] = useState(''); const [role, setRole] = useState('recruiter'); const [remove, setRemove] = useState<Member | null>(null);
   const [p, setP] = useState<Record<string, string> | null>(null);
@@ -47,6 +49,9 @@ export default function Team() {
           <Chips label="Company size" options={sizes} selected={p.company_size ? [p.company_size] : []} onToggle={(s) => owner && setP({ ...p, company_size: s })} />
           <Field label="Registered address" value={p.registered_address} editable={owner && !identityLocked} onChangeText={(v) => setP({ ...p, registered_address: v })} multiline /><Field label="Operating locations (comma separated)" value={p.operating_locations} editable={owner} onChangeText={(v) => setP({ ...p, operating_locations: v })} />
           {owner ? <PrimaryButton label="Save company profile" icon="save-outline" onPress={saveProfile} /> : <Text style={styles.muted}>Only owners can edit the company profile.</Text>}</Card>
+        <Card style={{ gap: 12 }}><SectionHead title="Review commitment" sub="Promise candidates a first reply (view, shortlist or decline) within a set number of days. It is shown on your jobs, and your reliability record shows how often you kept it." />
+          <Chips options={commitOptions} selected={[commit.data ? String(commit.data) : 'none']} onToggle={(id) => owner && run(async () => { const r = await supabase.rpc('set_review_commitment', { p_company: m.company.id, p_days: id === 'none' ? null : Number(id) }); if (!r.error) await commit.reload(); return r; }, id === 'none' ? 'Review commitment removed.' : `You now promise a reply within ${id} days.`)} />
+          {!owner && <Text style={styles.muted}>Only owners can change this.</Text>}</Card>
         <SectionHead title="Team" />
         <StateView loading={team.loading} error={team.error} onRetry={team.reload}>
           {(team.data ?? []).map((t) => <Card key={t.user_id} style={styles.row}><View style={{ flex: 1 }}><Text style={styles.title}>{t.display_name}{t.user_id === uid ? ' (you)' : ''}</Text><Text style={styles.muted}>{t.email ?? ''}</Text></View><Pill tone={t.active ? 'teal' : 'neutral'}>{t.active ? labelize(t.role) : 'Deactivated'}</Pill>

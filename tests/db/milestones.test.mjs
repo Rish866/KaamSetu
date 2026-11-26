@@ -76,7 +76,7 @@ test('two-sided joining: one side reports, the other confirms; nobody confirms t
   assert.match(await failure(emp(`select public.report_hiring_milestone($1,'joined_day_1')`, [app])) ?? '', /already recorded/);
   assert.match(await failure(emp(`select public.report_hiring_milestone($1,'candidate_no_show')`, [app])) ?? '', /already recorded/);
   assert.match(await failure(emp(`select public.report_hiring_milestone($1,'retained_day_15')`, [app])) ?? '', /Day 15 has not been reached/);
-  assert.match(await failure(emp(`select public.withdraw_offer($1,'Budget was cut')`, [app])) ?? '', /already joined/);
+  assert.match(await failure(emp(`select public.withdraw_offer($1,'Budget was cut','budget_or_headcount_change')`, [app])) ?? '', /already joined/);
   const audit = (await api.q(`select action from private.audit_events where target_id=$1 order by created_at`, [app])).rows.map((r) => r.action);
   assert.ok(audit.includes('hiring.joined_day_1.reported') && audit.includes('hiring.joined_day_1.confirmed'));
 });
@@ -93,12 +93,12 @@ test('no-show is employer-only; retention dates follow the joining day', async (
   await emp(`select public.report_hiring_milestone($1,'retained_day_30')`, [b.app]);
   const got = Object.fromEntries((await ms(b.app)).map((m) => [m.kind, m.d]));
   assert.deepEqual([got.joined_day_1, got.retained_day_15, got.retained_day_30], [day(-30), day(-15), day(0)]);
-  assert.match(await failure(emp(`select public.report_hiring_milestone($1,'left_before_day_30',$2)`, [b.app, day(-5)])) ?? '', /Day 30 is already recorded/);
+  assert.match(await failure(emp(`select public.report_hiring_milestone($1,'left_before_day_30',$2,null,'early_exit_resigned')`, [b.app, day(-5)])) ?? '', /Day 30 is already recorded/);
 
   const c = await toHire('Leaver Lata');
   await emp(`select public.report_hiring_milestone($1,'joined_day_1',$2)`, [c.app, day(-10)]);
-  assert.match(await failure(emp(`select public.report_hiring_milestone($1,'left_before_day_30',$2)`, [c.app, day(-11)])) ?? '', /first 30 days/);
-  await emp(`select public.report_hiring_milestone($1,'left_before_day_30',$2,'Resigned')`, [c.app, day(-2)]);
+  assert.match(await failure(emp(`select public.report_hiring_milestone($1,'left_before_day_30',$2,null,'early_exit_resigned')`, [c.app, day(-11)])) ?? '', /first 30 days/);
+  await emp(`select public.report_hiring_milestone($1,'left_before_day_30',$2,'Resigned','early_exit_resigned')`, [c.app, day(-2)]);
   assert.match(await failure(emp(`select public.report_hiring_milestone($1,'retained_day_30')`, [c.app])) ?? '', /Day 30 has not been reached|Leaving before day 30/);
 });
 
@@ -133,7 +133,7 @@ test('withdrawing an offer needs a reason, ends the application and tells the ca
   const { cand, app } = await toHire('Withdrawn Wes');
   assert.match(await failure(api.as(cand, (s) => s(`select public.withdraw_offer($1,'Changed my mind')`, [app]))) ?? '', /Only the employer/);
   assert.match(await failure(emp(`select public.withdraw_offer($1,'')`, [app])) ?? '', /reason/);
-  await emp(`select public.withdraw_offer($1,'Position was closed by finance')`, [app]);
+  await emp(`select public.withdraw_offer($1,'Position was closed by finance','budget_or_headcount_change')`, [app]);
   assert.equal(await stage(app), 'rejected');
   assert.ok((await rows(cand, 'select kind from public.notifications')).some((n) => n.kind === 'hiring.offer_withdrawn'));
 });

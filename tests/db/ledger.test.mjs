@@ -25,7 +25,7 @@ async function toHire(name) {
 }
 /** Employer reports, candidate confirms. */
 async function confirmed(c, kind, on) {
-  await emp('select public.report_hiring_milestone($1,$2,$3)', [c.app, kind, on ?? null]);
+  await emp('select public.report_hiring_milestone($1,$2,$3,null,$4)', [c.app, kind, on ?? null, kind === 'left_before_day_30' ? 'early_exit_resigned' : null]);
   await api.as(c.cand, async (s) => s('select public.confirm_hiring_milestone($1)', [await pendingMid(c.app, kind)]));
 }
 

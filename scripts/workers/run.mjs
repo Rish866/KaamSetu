@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Trusted background workers for KaamSetu (replace the earlier Edge Function workers).
 // Run by .github/workflows/workers.yml (production) and by CI against a local Supabase stack.
-//   node --experimental-strip-types scripts/workers/run.mjs --task all|resumes|privacy|email|hiring
+//   node --experimental-strip-types scripts/workers/run.mjs --task all|resumes|privacy|alerts|email|hiring
 // Env: SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY (never printed), optional CLAMSCAN_CMD, EMAIL_PROVIDER/EMAIL_API_KEY/EMAIL_FROM,
 //      SITE_URL. Logs contain only counts, task names and random IDs, never names, emails, phones or file contents.
 import { spawnSync } from 'node:child_process';
@@ -137,7 +137,14 @@ async function hiring() {
   bump('jobs_reminded', stale.reminded ?? 0); bump('jobs_auto_paused', stale.paused ?? 0);
 }
 
-const tasks = { resumes, privacy, email, hiring };
+// Opt-in job alerts: at most one digest per candidate a day; alert emails are capped at 50 a day in the database.
+async function alerts() {
+  const r = (await must(db.rpc('job_alerts_run'))) ?? {};
+  bump('alerts_sent', r.candidates_alerted ?? 0); bump('alert_emails_capped', r.emails_capped ?? 0);
+}
+
+// alerts runs before email so a new digest is delivered in the same run.
+const tasks = { resumes, privacy, alerts, email, hiring };
 for (const [name, fn] of Object.entries(tasks)) {
   if (task !== 'all' && task !== name) continue;
   try { await fn(); } catch (e) { console.error(JSON.stringify({ task: name, error: String(e.message ?? e).slice(0, 200) })); bump(`${name}_failed`); }

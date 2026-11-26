@@ -14,6 +14,23 @@ Production database changes are applied only after CI, a dry run and the owner's
 | 4. Outcome-based hiring ledger | pending_milestone → payable → paid / waived / disputed / void, audited; candidates never charged; fees off and ₹0 until an admin sets them; no payment gateway yet | **Deployed 2026-11-26** (fees OFF): migration applied (run 45819650667, backup production-backup-20261126T122645Z), live journey passed |
 | 5. DPDP | "joining verification" consent (asked at offer acceptance, enforced for every joining record); export v2 with hiring records and place names; deletion closes open reports and removes personal notes; updated notice (2026-11-26.2) and legal pack v2 | **Deployed and production tested 2026-11-26**: migration applied (run 45825052826, backup production-backup-20261126T130132Z), live journey 26/26 (run 45826031540) |
 
+## Accountability & privacy pass v2 (migrations 202611270001–0004)
+
+**Status: built and tested on branch `feat/accountability-privacy-v2`; not yet applied to production** (needs the owner's go-ahead).
+
+| Item | What it does | Where enforced |
+|------|--------------|----------------|
+| Outcome tags | One reason from a fixed, neutral catalogue (`public.outcome_reasons`, 15 codes in 6 categories). Required when an employer rejects, withdraws an offer or records an early exit; optional for candidate withdrawals and declined offers; no-shows are tagged automatically | `private.check_outcome_tag` inside `transition_application`, `withdraw_offer`, `report_hiring_milestone`, `withdraw_application`, `respond_to_offer` (new optional `p_outcome_tag`, old calls keep working) |
+| Readiness questions | Up to 2 per job (yes/no or short answer, required or optional). Required ones must be answered to apply; answers visible only to the candidate and that company; locked once anyone applies | `set_job_questions`, `apply_with_answers`, trigger `applications_require_answers` (accepted invitations are not blocked) |
+| Review commitment | Owner promises a first reply within 1–14 days; shown on jobs; scorecard shows how often it was kept (from 5 applications) | `set_review_commitment`, `company_scorecard.commitment` |
+| Trust details | Scorecard shows the verification method (GSTIN, CIN, LLPIN, domain, document) and date, never the number; how outcomes were confirmed; non-completion reasons above the existing thresholds. Zero-fee / anti-scam notices on job, apply, offer and contact views | `company_scorecard`, `TrustNotice` |
+| Access log | Candidates see consent status per purpose with one-tap withdrawal, and every access: masked profile shown in search (`discovery_views`), invitations, resume opened, contact revealed, joining records, resume reading | `my_access_log`, `discover_candidates` logging; consent changes audited (`consent.granted/withdrawn`, PII-free) |
+| Data minimisation | Resume no longer shared once an application is rejected (before: withdrawn only). Withdrawing resume reading cancels queued parsing | `get_applicant_resume`, `set_consent` |
+| Relocation & office days | Candidate: relocation (no / within state / preferred places / anywhere in India), max office days, commute note. Job: office days for hybrid. Relocation lifts a weak location match to 60 (anywhere) or 65 (home state) and widens discovery | `location_fit`, `discover_candidates`, `job_applicant_preferences` |
+| Job alerts | Off by default; at most one digest per 20 h, up to 5 new jobs scoring ≥ 70 and eligible; optional email; at most 50 alert emails a day platform-wide (the rest stay in-app) | `job_alerts_run` (worker task `alerts`) |
+| Pilot funnel | Admin/support view: job published → application → employer reply → offer → accepted → joined → day 15 → day 30, timing, trust counts, reasons, weekly trend; counts only; QA identities and companies excluded | `admin_funnel` |
+| Demo | `scripts/demo/seed-demo.mjs` seeds a full story into a local stack only (refuses non-localhost); the same story runs in `tests/db/demo.test.mjs`; CI takes walkthrough screenshots (artifact `demo-walkthrough`) | `scripts/demo/*`, `e2e/demo/*` |
+
 ## Part 1 decisions
 * Location score: area or PIN match 100, same city 85, same district 75, "entire state" preference 70, otherwise 0
   (a different city in the same state is not a match unless the candidate chose the whole state). Rank discount unchanged.

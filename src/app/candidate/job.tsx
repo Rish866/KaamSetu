@@ -4,17 +4,21 @@ import { StyleSheet, Text, View } from 'react-native';
 import { AppShell } from '../../components/AppShell';
 import { ScorecardCard, type Scorecard } from '../../components/Scorecard';
 import { Banner, Chips, ConfirmDialog, Field, Row, SectionHead, StateView, unwrap, useLoad } from '../../components/kit';
+import { TrustNotice } from '../../components/Trust';
 import { Card, Pill, PrimaryButton } from '../../components/ui';
 import { formatExperience, formatLocation, formatSalaryRange, friendlyError, labelize, timeAgo } from '../../lib/format';
 import { supabase } from '../../lib/supabase';
 import { colors } from '../../theme';
 
+type Question = { id: string; kind: 'yes_no' | 'short_text'; prompt: string; required: boolean };
+const yesNo = [{ id: 'yes', label: 'Yes' }, { id: 'no', label: 'No' }];
 type Component = { score: number | null; weight: number; missing: boolean; explanation: string };
 type Detail = {
   id: string; title: string; description: string; company: { name: string; verified: boolean; website: string | null; description: string | null; city: string | null };
   city: string | null; locality: string | null; work_mode: string; employment_type: string; salary_min: number; salary_max: number; salary_period: 'monthly' | 'annual';
   experience_min_months: number; experience_max_months: number | null; vacancies: number; closes_at: string | null; status: string; skills: { name: string; required: boolean }[];
   saved: boolean; application_id: string | null; location_label?: string | null; last_confirmed_at?: string | null; scorecard?: Scorecard | null;
+  office_days?: number | null; review_commitment_days?: number | null; questions?: Question[];
   match: { score: number; eligible: boolean; ineligible_reasons: string[]; confidence: number; version: number; components: Record<string, Component> };
 };
 const reportCategories = [['fee_requested', 'Asks for money'], ['fraud', 'Looks fake'], ['misleading', 'Misleading'], ['discrimination', 'Discriminatory'], ['other', 'Other']].map(([id, label]) => ({ id, label }));
@@ -24,10 +28,12 @@ export default function JobDetail() {
   const { data, loading, error, reload } = useLoad(async () => unwrap(await supabase.rpc('job_detail', { p_job: id })) as unknown as Detail | null, [id]);
   const [note, setNote] = useState(''); const [busy, setBusy] = useState(false); const [msg, setMsg] = useState<{ tone: 'error' | 'success'; text: string } | null>(null);
   const [reporting, setReporting] = useState(false); const [category, setCategory] = useState('fee_requested'); const [confirmApply, setConfirmApply] = useState(false);
+  const [answers, setAnswers] = useState<Record<string, boolean | string>>({});
 
   async function apply() {
     setBusy(true); setMsg(null);
-    const { error: e } = await supabase.rpc('apply_to_job', { p_job: id, p_note: note.trim() || null });
+    const payload = Object.entries(answers).filter(([, v]) => typeof v === 'boolean' || v.trim()).map(([question_id, answer]) => ({ question_id, answer: typeof answer === 'string' ? answer.trim() : answer }));
+    const { error: e } = await supabase.rpc('apply_with_answers', { p_job: id, p_note: note.trim() || null, p_answers: payload });
     setBusy(false);
     if (e) return setMsg({ tone: 'error', text: friendlyError(e) });
     setMsg({ tone: 'success', text: 'Application sent. Track it under Applications.' }); await reload();
@@ -45,11 +51,12 @@ export default function JobDetail() {
       {data && <>
         {msg && <Banner tone={msg.tone}>{msg.text}</Banner>}
         <Card style={{ gap: 14 }}>
-          <Row><Pill>{formatSalaryRange(data.salary_min, data.salary_max, data.salary_period)}</Pill><Pill tone="neutral">{labelize(data.work_mode)}</Pill><Pill tone="neutral">{labelize(data.employment_type)}</Pill><Pill tone="neutral">Experience {formatExperience(data.experience_min_months)}{data.experience_max_months ? `–${formatExperience(data.experience_max_months)}` : '+'}</Pill>{data.company.verified && <Pill tone="saffron">Verified company</Pill>}</Row>
+          <Row><Pill>{formatSalaryRange(data.salary_min, data.salary_max, data.salary_period)}</Pill><Pill tone="neutral">{labelize(data.work_mode)}</Pill><Pill tone="neutral">{labelize(data.employment_type)}</Pill><Pill tone="neutral">Experience {formatExperience(data.experience_min_months)}{data.experience_max_months ? `–${formatExperience(data.experience_max_months)}` : '+'}</Pill>{data.company.verified && <Pill tone="saffron">{data.scorecard?.verification?.method ? `Verified by ${data.scorecard.verification.method}` : 'Verified company'}</Pill>}{data.work_mode === 'hybrid' && data.office_days ? <Pill tone="neutral">{data.office_days} office day{data.office_days === 1 ? '' : 's'} a week</Pill> : null}{data.review_commitment_days ? <Pill tone="teal">Replies within {data.review_commitment_days} day{data.review_commitment_days === 1 ? '' : 's'}</Pill> : null}</Row>
           <Text style={styles.body}>{data.description}</Text>
           <Row>{data.skills.map((s) => <Pill key={s.name} tone={s.required ? 'teal' : 'neutral'}>{s.name}{s.required ? '' : ' (nice to have)'}</Pill>)}</Row>
           <Text style={styles.muted}>{data.vacancies} opening{data.vacancies === 1 ? '' : 's'}{data.closes_at ? ` · closes ${new Date(data.closes_at).toLocaleDateString('en-IN')}` : ''}{data.last_confirmed_at ? ` · employer confirmed it is still open ${timeAgo(data.last_confirmed_at)}` : ''}</Text>
         </Card>
+        <TrustNotice context="job" />
         {data.scorecard && <ScorecardCard s={data.scorecard} />}
         <SectionHead title={`Why this is a ${data.match.score}% match`} sub={`Scoring version ${data.match.version}. Missing profile data is scored neutrally and listed below.`} />
         <Card style={{ gap: 12 }}>
@@ -59,10 +66,17 @@ export default function JobDetail() {
         <Card style={{ gap: 12 }}>
           {data.application_id ? <><Text style={styles.compTitle}>You have applied to this job.</Text><PrimaryButton label="Track application" icon="arrow-forward" onPress={() => router.push('/candidate/applications')} /></> : data.status !== 'published' ? <Text style={styles.muted}>This job is not accepting applications.</Text> : <>
             <Field label="Note to the employer (optional)" value={note} onChangeText={setNote} multiline maxLength={1000} hint="Your name and profile are shared when you apply. Your email and phone stay private until you are shortlisted and agree." />
-            <Row><PrimaryButton label={busy ? 'Sending…' : 'Apply with my profile'} disabled={busy} icon="paper-plane-outline" onPress={() => setConfirmApply(true)} /><PrimaryButton label={data.saved ? 'Saved' : 'Save for later'} variant="secondary" icon={data.saved ? 'bookmark' : 'bookmark-outline'} onPress={toggleSave} /></Row></>}
+            <Row><PrimaryButton label={busy ? 'Sending…' : 'Apply with my profile'} disabled={busy} icon="paper-plane-outline" onPress={() => { setMsg(null); setConfirmApply(true); }} /><PrimaryButton label={data.saved ? 'Saved' : 'Save for later'} variant="secondary" icon={data.saved ? 'bookmark' : 'bookmark-outline'} onPress={toggleSave} /></Row></>}
           <PrimaryButton label="Report this job" variant="ghost" icon="flag-outline" onPress={() => setReporting(true)} />
         </Card>
-        <ConfirmDialog visible={confirmApply} title="Send your application?" message="The employer will see your name, profile, skills, match score and your resume (once it has passed security checks). Your email and phone stay hidden until you are shortlisted and agree in Settings. You can withdraw later." confirmLabel="Send application" onCancel={() => setConfirmApply(false)} onConfirm={async () => { setConfirmApply(false); await apply(); }} />
+        <ConfirmDialog visible={confirmApply} title="Send your application?" message="The employer will see your name, profile, skills, match score and your resume (once it has passed security checks). Your email and phone stay hidden until you are shortlisted and agree in Settings. You can withdraw later." confirmLabel="Send application" onCancel={() => setConfirmApply(false)} onConfirm={async () => {
+          const missing = (data.questions ?? []).find((q) => q.required && (answers[q.id] === undefined || (typeof answers[q.id] === 'string' && !(answers[q.id] as string).trim())));
+          if (missing) throw { message: `Please answer: ${missing.prompt}`, code: '22023' };
+          setConfirmApply(false); await apply(); }}>
+          {(data.questions ?? []).map((q) => q.kind === 'yes_no'
+            ? <Chips key={q.id} label={`${q.prompt}${q.required ? '' : ' (optional)'}`} options={yesNo} selected={answers[q.id] === undefined ? [] : [answers[q.id] ? 'yes' : 'no']} onToggle={(v) => setAnswers({ ...answers, [q.id]: v === 'yes' })} />
+            : <Field key={q.id} label={`${q.prompt}${q.required ? '' : ' (optional)'}`} value={(answers[q.id] as string | undefined) ?? ''} onChangeText={(t) => setAnswers({ ...answers, [q.id]: t })} maxLength={300} />)}
+          <TrustNotice context="apply" /></ConfirmDialog>
         <ConfirmDialog visible={reporting} title="Report this job" confirmLabel="Send report" destructive requireReason minReason={5} onCancel={() => setReporting(false)} onConfirm={report} message="Tell us what is wrong. Never pay money to get a job."><Chips label="Category" options={reportCategories} selected={[category]} onToggle={setCategory} /></ConfirmDialog>
       </>}
     </StateView>

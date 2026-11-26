@@ -5,6 +5,7 @@ import { friendlyError } from '../lib/format';
 import { supabase } from '../lib/supabase';
 import { colors } from '../theme';
 import { Banner, ConfirmDialog, Field, Row } from './kit';
+import { ReasonChips, TrustNotice } from './Trust';
 import { Pill, PrimaryButton } from './ui';
 
 export type Milestone = { id: string; kind: string; label: string; status: 'pending' | 'confirmed' | 'disputed' | 'rejected'; occurred_on: string;
@@ -19,6 +20,7 @@ export async function loadHiring(ids: string[]): Promise<Record<string, HiringSt
   return Object.fromEntries(((data ?? []) as unknown as HiringStatus[]).map((h) => [h.application_id, h]));
 }
 
+const needTag = () => { throw { message: 'Choose the main reason.', code: '22023' }; };
 const today = () => new Date().toISOString().slice(0, 10);
 const isDate = (s: string) => /^\d{4}-\d{2}-\d{2}$/.test(s) && !Number.isNaN(Date.parse(s));
 const daysSince = (d: string) => Math.floor((Date.now() - Date.parse(`${d}T00:00:00`)) / 86400e3);
@@ -29,7 +31,7 @@ type Dialog = { kind: 'accept' | 'decline' | 'withdraw' | 'date' | 'report' | 'd
 
 export function HiringMilestones({ applicationId, side, stage, status, onChanged }: {
   applicationId: string; side: 'candidate' | 'employer'; stage: string; status?: HiringStatus; onChanged: () => Promise<void> | void }) {
-  const [dlg, setDlg] = useState<Dialog>(null); const [date, setDate] = useState(today()); const [note, setNote] = useState('');
+  const [dlg, setDlg] = useState<Dialog>(null); const [date, setDate] = useState(today()); const [note, setNote] = useState(''); const [tag, setTag] = useState<string | null>(null);
   const [msg, setMsg] = useState<{ tone: 'error' | 'success'; text: string } | null>(null);
   const ms = status?.milestones ?? []; const active = (k: string) => ms.find((m) => m.kind === k && m.status !== 'rejected');
   const joined = active('joined_day_1'); const noShow = active('candidate_no_show'); const left = active('left_before_day_30');
@@ -40,7 +42,7 @@ export function HiringMilestones({ applicationId, side, stage, status, onChanged
     const { error } = await supabase.rpc(fn, args); if (error) throw error;
     setDlg(null); setMsg({ tone: 'success', text: ok }); await onChanged();
   }
-  const open = (d: NonNullable<Dialog>) => { setDate(today()); setNote(''); setMsg(null); setDlg(d); };
+  const open = (d: NonNullable<Dialog>) => { setDate(today()); setNote(''); setTag(null); setMsg(null); setDlg(d); };
   const report = (kind: string, title: string) => open({ kind: 'report', report: kind, title });
 
   return <View style={styles.box}>
@@ -59,6 +61,7 @@ export function HiringMilestones({ applicationId, side, stage, status, onChanged
         <PrimaryButton label="This is not right" variant="secondary" onPress={() => open({ kind: 'dispute', milestone: m.id, title: `Dispute: ${m.label}` })} /></Row>}
     </View>)}
     {msg && <Banner tone={msg.tone}>{msg.text}</Banner>}
+    {side === 'candidate' && offerOpen && <TrustNotice context="offer" />}
     <Row>
       {side === 'candidate' && offerOpen && <>
         <PrimaryButton label="Accept offer" icon="checkmark-circle-outline" onPress={() => open({ kind: 'accept', title: 'Accept this offer?' })} />
@@ -81,10 +84,12 @@ export function HiringMilestones({ applicationId, side, stage, status, onChanged
         await call('respond_to_offer', { p_application: applicationId, p_accept: true }, 'Offer accepted. Congratulations!');
       }} />
     <ConfirmDialog visible={dlg?.kind === 'decline'} title={dlg?.title ?? ''} message="The employer will see your reason if you give one. The application ends." confirmLabel="Decline offer" destructive onCancel={() => setDlg(null)}
-      onConfirm={() => call('respond_to_offer', { p_application: applicationId, p_accept: false, p_reason: note.trim() || null }, 'Offer declined.')}>
-      <Field label="Reason (optional)" value={note} onChangeText={setNote} maxLength={500} /></ConfirmDialog>
+      onConfirm={() => call('respond_to_offer', { p_application: applicationId, p_accept: false, p_reason: note.trim() || null, p_outcome_tag: tag }, 'Offer declined.')}>
+      <ReasonChips context="offer_declined" side="candidate" value={tag} onChange={setTag} />
+      <Field label="Anything to add (optional)" value={note} onChangeText={setNote} maxLength={500} /></ConfirmDialog>
     <ConfirmDialog visible={dlg?.kind === 'withdraw'} title={dlg?.title ?? ''} message="The candidate sees your reason. This cannot be undone and counts in your public reliability record." confirmLabel="Withdraw offer" destructive requireReason onCancel={() => setDlg(null)}
-      onConfirm={(reason) => call('withdraw_offer', { p_application: applicationId, p_reason: reason }, 'Offer withdrawn.')} />
+      onConfirm={(reason) => tag ? call('withdraw_offer', { p_application: applicationId, p_reason: reason, p_outcome_tag: tag }, 'Offer withdrawn.') : needTag()}>
+      <ReasonChips context="offer_withdrawn" side="employer" value={tag} onChange={setTag} required /></ConfirmDialog>
     <ConfirmDialog visible={dlg?.kind === 'dispute'} title={dlg?.title ?? ''} message="KaamSetu will review it with both sides. Explain what actually happened." confirmLabel="Send dispute" requireReason onCancel={() => setDlg(null)}
       onConfirm={(reason) => call('dispute_hiring_milestone', { p_milestone: dlg!.milestone, p_reason: reason }, 'Dispute sent to KaamSetu.')} />
     <ConfirmDialog visible={dlg?.kind === 'date' || dlg?.kind === 'report'} title={dlg?.title ?? ''} confirmLabel="Save" onCancel={() => setDlg(null)}
@@ -92,9 +97,12 @@ export function HiringMilestones({ applicationId, side, stage, status, onChanged
       onConfirm={async () => {
         if (!isDate(date)) throw { message: 'Enter the date as YYYY-MM-DD, for example 2026-12-01.', code: '22023' };
         if (dlg?.kind === 'date') return call('set_joining_date', { p_application: applicationId, p_date: date }, 'Joining date saved.');
-        return call('report_hiring_milestone', { p_application: applicationId, p_kind: dlg!.report, p_on: date, p_note: note.trim() || null }, 'Recorded. The other side will be asked to confirm.');
+        const leaving = dlg?.report === 'left_before_day_30';
+        if (leaving && !tag) needTag();
+        return call('report_hiring_milestone', { p_application: applicationId, p_kind: dlg!.report, p_on: date, p_note: note.trim() || null, p_outcome_tag: leaving ? tag : null }, 'Recorded. The other side will be asked to confirm.');
       }}>
       <Field label="Date (YYYY-MM-DD)" value={date} onChangeText={setDate} placeholder="2026-12-01" autoCapitalize="none" />
+      {dlg?.report === 'left_before_day_30' && <ReasonChips context="left_before_day_30" side={side} value={tag} onChange={setTag} required />}
       {dlg?.kind === 'report' && <Field label="Note (optional)" value={note} onChangeText={setNote} maxLength={500} />}
     </ConfirmDialog>
   </View>;

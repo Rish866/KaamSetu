@@ -4,6 +4,7 @@ import { StyleSheet, Text, View } from 'react-native';
 import { AppShell } from '../../components/AppShell';
 import { HiringMilestones, loadHiring } from '../../components/HiringMilestones';
 import { Banner, ConfirmDialog, Field, Row, SectionHead, StateView, unwrap, useLoad } from '../../components/kit';
+import { ReasonChips } from '../../components/Trust';
 import { Card, Pill, PrimaryButton } from '../../components/ui';
 import { formatSalaryRange, friendlyError, labelize, stageLabels, timeAgo } from '../../lib/format';
 import { supabase } from '../../lib/supabase';
@@ -23,7 +24,7 @@ export default function Applications() {
   const [withdraw, setWithdraw] = useState<App | null>(null);
   const [resched, setResched] = useState<App | null>(null);
   const [declineInvite, setDeclineInvite] = useState<Invite | null>(null);
-  const [note, setNote] = useState('');
+  const [note, setNote] = useState(''); const [tag, setTag] = useState<string | null>(null);
 
   async function run(fn: () => PromiseLike<{ error: { message?: string; code?: string } | null }>, ok: string) {
     const { error } = await fn();
@@ -48,10 +49,11 @@ export default function Applications() {
             {a.interview.status !== 'reschedule_requested' && <PrimaryButton label="Request another time" variant="secondary" onPress={() => { setNote(''); setResched(a); }} />}
             <PrimaryButton label="Decline" variant="ghost" onPress={() => run(() => supabase.rpc('respond_to_interview', { p_interview: a.interview!.id, p_action: 'decline' }), 'Interview declined.')} /></Row></Card>}
         <HiringMilestones applicationId={a.id} side="candidate" stage={a.stage} status={hiring.data?.[a.id]} onChanged={async () => { await apps.reload(); }} />
-        <Row><PrimaryButton label="View job" variant="ghost" onPress={() => router.push({ pathname: '/candidate/job', params: { id: a.job_id } })} />{!['offer', 'hired', 'rejected', 'withdrawn'].includes(a.stage) && <PrimaryButton label="Withdraw application" variant="secondary" icon="close-circle-outline" onPress={() => setWithdraw(a)} />}</Row>
+        <Row><PrimaryButton label="View job" variant="ghost" onPress={() => router.push({ pathname: '/candidate/job', params: { id: a.job_id } })} />{!['offer', 'hired', 'rejected', 'withdrawn'].includes(a.stage) && <PrimaryButton label="Withdraw application" variant="secondary" icon="close-circle-outline" onPress={() => { setTag(null); setWithdraw(a); }} />}</Row>
       </Card>)}</View>
     </StateView>
-    <ConfirmDialog visible={!!withdraw} destructive title="Withdraw this application?" message="The employer will no longer see it, and you cannot apply to this job again." confirmLabel="Withdraw" onCancel={() => setWithdraw(null)} onConfirm={async () => { const a = withdraw!; setWithdraw(null); await run(() => supabase.rpc('withdraw_application', { p_application: a.id }), 'Application withdrawn.'); }} />
+    <ConfirmDialog visible={!!withdraw} destructive title="Withdraw this application?" message="The employer will no longer see it, and you cannot apply to this job again." confirmLabel="Withdraw" onCancel={() => setWithdraw(null)} onConfirm={async () => { const a = withdraw!; setWithdraw(null); await run(() => supabase.rpc('withdraw_application', { p_application: a.id, p_outcome_tag: tag }), 'Application withdrawn.'); }}>
+      <ReasonChips context="withdrawn" side="candidate" value={tag} onChange={setTag} /></ConfirmDialog>
     <ConfirmDialog visible={!!declineInvite} title="Decline this invitation?" confirmLabel="Decline" onCancel={() => setDeclineInvite(null)} onConfirm={async () => { const i = declineInvite!; setDeclineInvite(null); await run(() => supabase.rpc('respond_to_invitation', { p_invitation: i.id, p_accept: false }), 'Invitation declined.'); }} />
     <ConfirmDialog visible={!!resched} title="Request another time" confirmLabel="Send request" onCancel={() => setResched(null)} onConfirm={async () => { const a = resched!; setResched(null); await run(() => supabase.rpc('respond_to_interview', { p_interview: a.interview!.id, p_action: 'reschedule', p_note: note || null }), 'Request sent to the employer.'); }}><Field label="Preferred times (optional)" value={note} onChangeText={setNote} multiline maxLength={500} /></ConfirmDialog>
   </AppShell>;

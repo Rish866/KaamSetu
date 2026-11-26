@@ -22,6 +22,7 @@ Status words: Written → Locally tested → CI tested → Merged → Deployed �
 | v1.4.0 tag / GitHub release / store builds | Not created | — |
 
 ## Release log
+* 2026-11-27: accountability & privacy pass v2 (migrations 202611270001–0004) built on `feat/accountability-privacy-v2`; DB tests 131/131; awaiting owner approval to apply.
 * 2026-11-20: owner declined migrate-first; deploy-first plan written (docs/RELEASE_PLAN.md).
 * 2026-11-20 22:08–22:35 UTC: owner merged PR #3, deployed the website, ran `backup` and `apply`. Migrations 0001–0006 applied; post-apply checks passed in the same run.
 * 2026-11-21: post-release verification found the missing-icon defect (PR #5) and ran the first restore drill.

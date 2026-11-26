@@ -99,6 +99,14 @@ jobs:
         if: always()
         run: |
           [ -f test-results/live-results.json ] && jq -r '.suites[] | .title as $f | (.. | objects | select(has("specs")) | .specs[]? | "\($f) | \(.title) | \(.tests[0].results[-1].status // "not run")")' test-results/live-results.json | sort -u || echo "no results file"
+      - name: Demo walkthrough screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: demo-walkthrough
+          path: test-results/demo
+          if-no-files-found: warn
+          retention-days: 14
 
   edge-functions:
     name: Edge Functions type check (Deno)

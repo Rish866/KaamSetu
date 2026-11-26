@@ -7,6 +7,7 @@ const esc = (s: string) => s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&
 const lines: Record<string, string> = {
   'security.password_changed': 'The password for your KaamSetu account was changed. If you did not do this, reset your password now and contact support.',
   'security.contact_changed': 'The email address or mobile number on your KaamSetu account was changed. If you did not do this, contact support now.',
+  'job.match_alert': 'New jobs from verified employers match your KaamSetu profile. Sign in to see them. You turned on job alerts; you can turn them off in Settings.',
   'privacy.deletion_completed': 'Your request to delete your KaamSetu account has been completed. Your profile, skills and resume have been removed.',
 };
 const generic = 'There is an update on your KaamSetu account. Sign in to see the details. For your privacy we never put application details in email.';

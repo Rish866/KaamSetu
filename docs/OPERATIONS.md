@@ -45,6 +45,7 @@ request → Admin → Privacy → Process deletion; the privacy worker then soft
 | Resume scan / parse / purge | every 15 min | GitHub "Background workers" → `scripts/workers/run.mjs --task resumes`: ClamAV (`clamav/clamav:stable` Docker image, bundled signatures) + structural checks; consent-gated parsing; purge of deleted files; scans pending > 24 h fail as `scan_timeout` | CI tested on a local stack (EICAR detected, also inside a DOCX); not run in production |
 | Deletion clean-up (auth identity, files) | every 15 min | same workflow, `--task privacy`: Auth soft delete (frees email/phone) + Storage API purge | CI tested on a local stack; not run in production |
 | Email delivery | every 15 min | same workflow, `--task email`: outbox → Resend | skipped until GitHub secret `RESEND_API_KEY` exists |
+| Job alerts | every 15 min (runs before email) | same workflow, `--task alerts`: `job_alerts_run` — opted-in candidates, one digest per 20 h, up to 5 jobs with score ≥ 70. Alert emails above 50 a day are marked `suppressed` with `daily_alert_cap` (Resend free tier: 100 emails/day) and stay in the app | pending migration 202611270003 |
 
 The workflow needs no extra secret: it fetches the project's secret API key at run time from the Management API with the
 existing `SUPABASE_ACCESS_TOKEN` (masked in logs, never stored) and does nothing until `schema_version()` ≥ 202611200006.
@@ -60,7 +61,7 @@ processor of resume files **[LEGAL REVIEW]**. Resume uploads stay switched off (
 4. Privacy queue: confirm identity by email reply before processing deletion.
 5. System tab: failed emails and the resume-upload switch. If many emails fail, check the Resend dashboard and the "Background workers" run log.
 6. Supabase Dashboard → Logs: auth errors, 5xx from the API, unusual sign-up spikes.
-7. Record pilot metrics (docs/PILOT.md).
+7. Record pilot metrics (docs/PILOT.md). Admin → Pilot funnel gives the stage counts, reply times, trust counts and reasons (QA accounts excluded).
 
 ## 4. Backups and restore drill
 
