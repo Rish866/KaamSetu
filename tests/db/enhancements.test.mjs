@@ -161,11 +161,11 @@ test('review commitment: owner only, 1-14 days, and the scorecard reports how of
 
 test('GSTIN verification shows the method, never the number', async () => {
   const c = await makeCompany(api, admin, 'Gst Co', { approve: false });
-  await as(c.owner, `select public.submit_company_verification($1,'gstin','27AAPFU0939F1ZV')`, [c.companyId]);
+  await as(c.owner, `select public.submit_company_verification($1,'gstin','27AABCD1234E1Z5')`, [c.companyId]);
   await as(admin, `select public.admin_review_company($1,'approve','GSTIN checked on the GST portal')`, [c.companyId]);
   const card = (await as(admin, 'select * from public.company_scorecards($1::uuid[]) v', [[c.companyId]]))[0].v;
   assert.equal(card.verification.method, 'GSTIN');
-  assert.ok(!JSON.stringify(card).includes('27AAPFU0939F1ZV'));
+  assert.ok(!JSON.stringify(card).includes('27AABCD1234E1Z5'));
 });
 
 // ---- Access log, consent audit, minimisation --------------------------------------------------------------------

@@ -51,6 +51,15 @@ lawyer approval before public launch.
 * Export (`request_data_export`, version 2) includes hiring records and place names. Deletion closes open reports and removes notes the person wrote; confirmed outcomes stay without the person's name.
 * **[LEGAL]** legal basis (consent vs. legitimate use) for joining confirmations; publishing employer statistics; keeping anonymised outcomes after deletion; fee and invoicing terms.
 
+## Access log, reasons, alerts (added 2026-11-27, pending production)
+* Settings → "Who used your data" lists, per purpose, the current consent (with one-tap withdrawal) and each access: an employer's search showing your masked profile, invitations, your resume being opened, your email/phone being revealed, joining records, and KaamSetu reading your resume. Employers cannot read this log.
+* Consent changes also write a PII-free audit event (purpose and notice version only).
+* Reasons for closing an application or hire come from a fixed list of neutral codes (no free-text labels about a person). They are shown to both sides and counted, without names, in reliability records and the admin funnel.
+* Readiness answers are visible only to the candidate and the company they applied to. Office days and commute note are shown only to employers you apply to; relocation is also shown in employer search when discovery is on.
+* Resumes stop being shared when an application is rejected or withdrawn.
+* Job alerts are off by default; turning them on is recorded in the audit log. Alert emails are optional mail and respect the email setting.
+* **[LEGAL]** whether the access-log retention should match `audit_events`; whether showing reason categories publicly needs notice text.
+
 ## Children
 Sign-up requires confirming 18+. No age is stored or used. **[LEGAL]** confirm self-declaration is adequate for a job marketplace.
 

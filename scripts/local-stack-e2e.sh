@@ -30,4 +30,7 @@ status=0
 npx playwright test --config e2e/live/playwright.live.config.ts || status=1
 # Background workers (resume scanning with real ClamAV, parsing, privacy clean-up, email) against the same local stack.
 SERVICE_ROLE_KEY="${SECRET_KEY:-$SERVICE_ROLE_KEY}" node --test --test-reporter=spec tests/workers/workers.test.mjs || status=1
+# Demo story (local only: the seeder refuses non-localhost URLs) and a screenshot walkthrough, uploaded as an artifact.
+DEMO_DB_URL="$DB_URL" DEMO_API_URL="$API_URL" DEMO_SERVICE_KEY="${SECRET_KEY:-$SERVICE_ROLE_KEY}" node scripts/demo/seed-demo.mjs || status=1
+npx playwright test --config e2e/demo/playwright.demo.config.ts || status=1
 exit $status
