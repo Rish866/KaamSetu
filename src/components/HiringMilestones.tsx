@@ -48,7 +48,7 @@ export function HiringMilestones({ applicationId, side, stage, status, onChanged
     {ms.map((m) => <View key={m.id} style={styles.item}>
       <View style={{ flex: 1, gap: 2 }}>
         <Text style={styles.label}>{m.label} · {new Date(`${m.occurred_on}T00:00:00`).toLocaleDateString('en-IN')} · reported by {m.reported_role === side ? 'you' : m.reported_role === 'employer' ? 'the employer' : 'the candidate'}</Text>
-        {m.note && <Text style={styles.muted}>{m.note}</Text>}
+        {m.note && !(side === 'candidate' && m.kind === 'offer_issued') && <Text style={styles.muted}>{m.note}</Text>}{/* candidates already see the offer text in their timeline */}
         {m.dispute_reason && <Text style={styles.muted}>Dispute: {m.dispute_reason}</Text>}
         {m.resolution_reason && <Text style={styles.muted}>KaamSetu decision: {m.resolution_reason}</Text>}
       </View>

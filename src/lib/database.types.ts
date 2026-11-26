@@ -939,6 +939,8 @@ export type Database = {
       get_applicant_contact: { Args: Record<string, unknown>; Returns: unknown };
       /** (p_application uuid) => text */
       get_applicant_resume: { Args: Record<string, unknown>; Returns: unknown };
+      /** (p_applications uuid[]) => TABLE(application_id uuid, joining_date date, milestones jsonb) */
+      hiring_status: { Args: Record<string, unknown>; Returns: unknown };
       /** (p_job uuid, p_candidate uuid, p_message text DEFAULT NULL::text) => uuid */
       invite_candidate: { Args: Record<string, unknown>; Returns: unknown };
       /** (p_company uuid, p_email text, p_role company_role) => uuid */
