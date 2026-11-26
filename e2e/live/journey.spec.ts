@@ -12,6 +12,7 @@ const tag = Date.now().toString(36);
 const cand = { name: `QA Candidate ${tag}`, email: qaEmail('cand') };
 const emp = { name: `QA Employer ${tag}`, email: qaEmail('emp'), company: `QA Test Co ${tag}` };
 const jobTitle = `QA Support Lead ${tag}`;
+const question = `Can you work alternate Saturdays (${tag})?`;
 let c: Page, e: Page, a: Page;
 
 test.beforeAll(async ({ browser }) => {
@@ -85,6 +86,9 @@ test('9-10. employer creates a job; admin approves it', async () => {
   await e.getByRole('textbox', { name: 'Minimum annual salary (₹)' }).fill('500000');
   await e.getByRole('textbox', { name: 'Maximum annual salary (₹)' }).fill('700000');
   await e.getByRole('textbox', { name: 'Minimum experience (years)' }).fill('1');
+  await btn(e, '3 days').click(); // office days for a hybrid job
+  await btn(e, 'Add a question').click();
+  await e.getByRole('textbox', { name: 'Question 1' }).fill(question);
   await btn(e, 'Submit for review').click();
   await expect(e).toHaveURL(/\/employer\/jobs/, { timeout: 20_000 });
   await expect(card(e, jobTitle, 'Applicants').getByText('Pending review')).toBeVisible();
@@ -122,7 +126,13 @@ test('11-12. candidate searches, sees an explainable match and applies', async (
   // A brand-new QA company has no hiring history: the scorecard says so instead of showing numbers.
   await expect(c.getByText('Employer reliability')).toBeVisible();
   await expect(c.getByText('New employer', { exact: true })).toBeVisible();
+  await expect(c.getByText(/KaamSetu is free for candidates/)).toBeVisible();
+  await expect(c.getByText('3 office days a week')).toBeVisible();
   await btn(c, 'Apply with my profile').click();
+  await expect(c.getByText(/Applying is free/)).toBeVisible();
+  await btn(c, 'Send application').click(); // the readiness question is required
+  await expect(c.getByText(`Please answer: ${question}`)).toBeVisible();
+  await btn(c, 'Yes').click();
   await confirmDialog(c, 'Send application');
   await expect(c.getByText(/Application sent/)).toBeVisible();
   await c.reload(); // deep link /candidate/job?id=... must survive a reload on a static host
@@ -134,6 +144,7 @@ test('13-15. employer views and shortlists; contact stays hidden until the candi
   await e.goto(`${env.base}/employer/jobs`);
   await inCard(e, jobTitle, 'Applicants');
   await expect(e.getByText(cand.name)).toBeVisible({ timeout: 20_000 });
+  await expect(e.getByText(question)).toBeVisible();
   await btn(e, 'Mark viewed').click();
   // Wait for the first transition: applied -> shortlisted is also allowed, so a fast second click can skip "Viewed".
   await expect(e.getByText(/moved to Viewed/)).toBeVisible();
@@ -218,6 +229,10 @@ test('20. candidate downloads a personal-data export', async () => {
   expect(body.account.email).toBe(cand.email);
   expect(body.applications[0].stage).toBe('hired'); // the candidate accepted the offer in step 19b
   expect(JSON.stringify(body)).not.toContain(emp.email);
+  // Access log: the contact reveal (step 15) and the joining record (step 19b) are listed for the candidate.
+  await expect(c.getByText('Who used your data')).toBeVisible();
+  await expect(c.getByText(/^Email and phone · 1 record$/)).toBeVisible();
+  await expect(c.getByText(/^Joining records · 1 record$/)).toBeVisible();
 });
 
 test('21-22. candidate requests deletion; admin processes the privacy request', async () => {
