@@ -4,6 +4,7 @@ import { StyleSheet, Text, View } from 'react-native';
 import { AppShell } from '../../components/AppShell';
 import { JobCard, FeedJob } from '../../components/JobCard';
 import { LocationPicker } from '../../components/LocationPicker';
+import { loadScorecards, scorecardLine } from '../../components/Scorecard';
 import { Banner, Chips, Field, Row, SectionHead, StateView, unwrap, useLoad } from '../../components/kit';
 import { Card, PrimaryButton } from '../../components/ui';
 import { friendlyError } from '../../lib/format';
@@ -29,6 +30,8 @@ export default function CandidateJobs() {
     p_min_salary: applied.minSalary ? Number(applied.minSalary) : null, p_work_mode: applied.workMode,
     p_employment_type: applied.employmentType, p_sort: applied.sort, p_saved_only: applied.savedOnly, p_limit: 50, p_offset: 0,
   })) as unknown as FeedJob[]; }, [applied]);
+
+  const trust = useLoad(async () => loadScorecards((feed.data ?? []).map((j) => j.company_id).filter((x): x is string => Boolean(x))), [feed.data]);
 
   async function toggleSave(job: FeedJob) {
     const { error } = await supabase.rpc('toggle_saved_job', { p_job: job.job_id });
@@ -60,7 +63,7 @@ export default function CandidateJobs() {
     {notice && <Banner tone="error">{notice}</Banner>}
     <SectionHead title={applied.savedOnly ? 'Saved jobs' : 'Jobs for you'} sub={feed.data ? `${feed.data.length} job${feed.data.length === 1 ? '' : 's'} found` : undefined} />
     <StateView loading={feed.loading} error={feed.error} onRetry={feed.reload} empty={(feed.data ?? []).length === 0} emptyTitle="No jobs match yet" emptyText="Try fewer filters. New verified jobs appear here as soon as they are approved.">
-      <View style={{ gap: 14 }}>{(feed.data ?? []).map((job) => <JobCard key={job.job_id} job={job} onSave={() => toggleSave(job)} onOpen={() => router.push({ pathname: '/candidate/job', params: { id: job.job_id } })} />)}</View>
+      <View style={{ gap: 14 }}>{(feed.data ?? []).map((job) => <JobCard key={job.job_id} job={job} trust={scorecardLine(job.company_id ? trust.data?.[job.company_id] : null)} onSave={() => toggleSave(job)} onOpen={() => router.push({ pathname: '/candidate/job', params: { id: job.job_id } })} />)}</View>
     </StateView>
   </AppShell>;
 }
