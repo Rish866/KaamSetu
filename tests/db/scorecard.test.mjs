@@ -53,7 +53,10 @@ test('offers honoured, joining and day-30 retention count confirmed milestones o
   const co = await makeCompany(api, admin, 'Honest Co');
   const job = await makeJob(api, admin, co, { title: 'Honest role' });
   const apps = []; const cands = [];
-  for (let i = 0; i < 5; i++) { const c = await makeCandidate(api, `Hire ${i}`); cands.push(c); apps.push(await apply(c, job)); }
+  for (let i = 0; i < 5; i++) {
+    const c = await makeCandidate(api, `Hire ${i}`); cands.push(c); apps.push(await apply(c, job));
+    await api.as(c, (s) => s("select public.set_consent('joining_verification', true, '2026-11-26.2')"));
+  }
   const add = (i, kind, status = 'confirmed') => api.q(`insert into public.hiring_milestones (application_id, company_id, candidate_id, kind, status, reported_by, reported_role)
     values ($1,$2,$3,$4,$5,$6,'employer')`, [apps[i], co.companyId, cands[i].id, kind, status, co.owner.id]);
   for (const i of [0, 1, 2, 3]) await add(i, 'offer_issued');

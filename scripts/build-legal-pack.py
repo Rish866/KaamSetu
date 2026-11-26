@@ -11,12 +11,13 @@ from docx.enum.text import WD_ALIGN_PARAGRAPH
 
 legal = json.load(open(sys.argv[1]))
 out = sys.argv[2]
-DATE = '25 November 2026'
+DATE = '26 November 2026 (version 2)'
 privacy_md = open('docs/PRIVACY.md').read()
 store_md = open('docs/store/PRIVACY_DISCLOSURES.md').read()
 
 FACTS = [
-    ('Operator', 'Aarvya Global Ventures LLP. Website: https://www.getkaamsetu.in (job marketplace for Mumbai, Navi Mumbai, Thane and Pune).'),
+    ('Operator', 'Aarvya Global Ventures LLP. Website: https://www.getkaamsetu.in (job marketplace across India).'),
+    ('Changed since version 1', 'India-wide locations (states, districts, PIN codes); two-sided offer and joining records (joined, day 15, day 30) with disputes decided by KaamSetu; a new consent "joining verification" asked when accepting an offer; public employer reliability figures; an employer hiring-fee ledger (fees switched off). Privacy notice and terms updated (notice version 2026-11-26.2).'),
     ('Status', 'The website is live. Real users have not been invited yet; public launch waits for this review. All texts below are drafts written by the engineering team, not by a lawyer.'),
     ('Who uses it', 'Job seekers (18+, self-declared), employers (must be verified by KaamSetu before publishing jobs) and KaamSetu administrators.'),
     ('Data stored', 'Supabase (database, sign-in, file storage). Hosting region: to be confirmed by the owner in the Supabase dashboard.'),
@@ -25,6 +26,9 @@ FACTS = [
     ('Backups', 'Encrypted (AES-256) database backups are kept for 30 days as GitHub workflow files.'),
     ('Email', 'Outgoing app email (password reset, notifications) via Resend, from no-reply@send.getkaamsetu.in. Support and privacy mailboxes via Zoho Mail (support@ and privacy@getkaamsetu.in).'),
     ('Scheduler', 'cron-job.org starts the background jobs every 15 minutes. It receives no personal data.'),
+    ('Hiring records', 'Offer, joining, no-show and day-15/day-30 status are reported by one side and confirmed by the other (auto-confirmed after 7 days without reply; disputes decided by KaamSetu with a written reason). Requires the candidate\'s joining-verification consent.'),
+    ('Employer reliability', 'Public figures per verified employer, calculated by KaamSetu (median response time, offers honoured, hires who joined, day-30 retention), shown only above minimum sample sizes. No candidate names.'),
+    ('Hiring fees', 'Employers may later pay a fee per hire when a milestone is confirmed. Currently OFF and ₹0; no payments are collected through KaamSetu. Candidates never pay.'),
     ('Not used', 'No advertising, no tracking or analytics tools, no data sale, no AI. Match scores come from a fixed rule-based formula.'),
 ]
 QUESTIONS = [
@@ -36,7 +40,10 @@ QUESTIONS = [
     'Is consent the right legal basis for core processing, or should parts rely on "legitimate uses"?',
     'Is the 18+ self-declaration adequate? Do notices need Marathi or Hindi versions?',
     'Please review the Terms of Use, and advise on employer terms (verification, no fees from candidates, use of disclosed contact details).',
-    'What may be kept after an account is deleted (consent records, audit logs, anonymised application history), and for how long?',
+    'What may be kept after an account is deleted (consent records, audit logs, anonymised application history and hiring outcomes), and for how long?',
+    'Joining confirmations: is consent (asked when accepting an offer) the right basis, or is this a legitimate use connected to the job? Please approve the wording in the accept-offer dialog and in Settings.',
+    'May we publish employer reliability figures derived from hiring outcomes? Anything to state in the employer terms?',
+    'Hiring fees: what must the employer terms, invoices and GST treatment cover before fees are switched on?',
 ]
 
 def strip_ts_tags(t):

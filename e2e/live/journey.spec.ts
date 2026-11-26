@@ -192,6 +192,8 @@ test('19. candidate sees every status update', async () => {
 test('19b. candidate accepts the offer; employer records joining; candidate confirms it', async () => {
   await c.goto(`${env.base}/candidate/applications`);
   await btn(c, 'Accept offer').click();
+  await expect(c.getByText(/you agree that KaamSetu records your joining/)).toBeVisible();
+  await btn(c, 'Agree and accept').click();
   await expect(c.getByText('Offer accepted. Congratulations!')).toBeVisible();
   await expect(c.getByText(/Offer accepted ·/)).toBeVisible();
   await e.reload();

@@ -21,7 +21,7 @@ async function toOffer(name, details = 'CTC 6 LPA, joining on the 1st') {
   await t('offer', details);
   return { cand, app };
 }
-async function toHire(name) { const r = await toOffer(name); await api.as(r.cand, (s) => s('select public.respond_to_offer($1, true)', [r.app])); return r; }
+async function toHire(name) { const r = await toOffer(name); await api.as(r.cand, async (s) => { await s("select public.set_consent('joining_verification', true, '2026-11-26.2')"); return s('select public.respond_to_offer($1, true)', [r.app]); }); return r; }
 
 before(async () => {
   ({ api, admin } = await world());
@@ -35,11 +35,11 @@ test('an offer is recorded automatically; only the candidate turns it into a hir
   assert.match(await failure(emp('select public.transition_application($1,$2)', [app, 'hired'])) ?? '', /candidate accepts the offer/);
   assert.match(await failure(emp('select public.respond_to_offer($1, true)', [app])) ?? '', /Only the candidate/);
   const stranger = await makeCandidate(api, 'Stranger Sam');
-  assert.match(await failure(api.as(stranger, (s) => s('select public.respond_to_offer($1, true)', [app]))) ?? '', /not found/);
-  await api.as(cand, (s) => s('select public.respond_to_offer($1, true)', [app]));
+  assert.match(await failure(api.as(stranger, async (s) => { await s("select public.set_consent('joining_verification', true, '2026-11-26.2')"); return s('select public.respond_to_offer($1, true)', [app]); })) ?? '', /not found/);
+  await api.as(cand, async (s) => { await s("select public.set_consent('joining_verification', true, '2026-11-26.2')"); return s('select public.respond_to_offer($1, true)', [app]); });
   assert.equal(await stage(app), 'hired');
   assert.deepEqual((await ms(app)).map((m) => [m.kind, m.status]), [['offer_issued', 'confirmed'], ['offer_accepted', 'confirmed']]);
-  assert.match(await failure(api.as(cand, (s) => s('select public.respond_to_offer($1, true)', [app]))) ?? '', /no open offer/);
+  assert.match(await failure(api.as(cand, async (s) => { await s("select public.set_consent('joining_verification', true, '2026-11-26.2')"); return s('select public.respond_to_offer($1, true)', [app]); })) ?? '', /no open offer/);
   assert.ok((await rows(co.owner, 'select kind from public.notifications')).some((n) => n.kind === 'hiring.offer_accepted'));
 });
 
