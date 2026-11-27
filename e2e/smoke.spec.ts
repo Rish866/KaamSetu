@@ -1,7 +1,7 @@
 import { AxeBuilder } from '@axe-core/playwright';
 import { expect, test } from '@playwright/test';
 
-const publicPages = ['/', '/login', '/privacy', '/terms', '/support'];
+const publicPages = ['/', '/login', '/privacy', '/terms', '/support', '/download'];
 
 // These checks are about this build, not about the database it happens to point at: report a current schema so the
 // maintenance redirect (covered in maintenance.spec.ts) does not race them. Tests that register their own routes win.

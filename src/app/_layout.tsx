@@ -34,7 +34,7 @@ function RootNavigator() {
   const { access, loading, session } = useAuth();
   const schema = useSchemaCheck();
   // During a release window the database may be behind this website build. Public pages (home, privacy, terms,
-  // support, maintenance) stay available; everything that needs the new database goes to /maintenance.
+  // support, download, maintenance) stay available; everything that needs the new database goes to /maintenance.
   const ready = schema !== 'outdated';
   const away = ready ? '/login' : '/maintenance';
   if (loading && ready) return <View style={styles.loading}><ActivityIndicator size="large" color={colors.teal} /></View>;
@@ -44,6 +44,7 @@ function RootNavigator() {
     <Stack.Screen name="privacy" />
     <Stack.Screen name="terms" />
     <Stack.Screen name="support" />
+    <Stack.Screen name="download" />
     <Stack.Screen name="maintenance" />
     <Stack.Protected guard={ready} redirectTo="/maintenance">
       <Stack.Screen name="login" />

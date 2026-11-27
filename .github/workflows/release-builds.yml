@@ -37,10 +37,12 @@ jobs:
         run: |
           mkdir -p release
           cp android/app/build/outputs/apk/release/app-release.apk "release/KaamSetu-${{ github.ref_name }}.apk"
+          # Fixed name as well, so the website can always link to .../releases/latest/download/KaamSetu.apk
+          cp android/app/build/outputs/apk/release/app-release.apk release/KaamSetu.apk
       - uses: actions/upload-artifact@v4
         with:
           name: kaamsetu-android-apk
-          path: release/KaamSetu-*.apk
+          path: release/KaamSetu*.apk
           if-no-files-found: error
 
   ios-simulator:
